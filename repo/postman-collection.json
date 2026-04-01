@@ -1,0 +1,1181 @@
+{
+  "info": {
+    "name": "JusticeOps API Sequential",
+    "description": "Sequential Postman collection for JusticeOps. Run top-to-bottom manually; prerequisites are captured into collection variables automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "superAdminUsername", "value": "superadmin" },
+    { "key": "adminUsername", "value": "admin1" },
+    { "key": "lawyerUsername", "value": "lawyer1" },
+    { "key": "clientUsername", "value": "client1" },
+    { "key": "defaultPassword", "value": "SecurePass1!" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/health"
+      }
+    },
+    {
+      "name": "02 - Server Time",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/time"
+      }
+    },
+    {
+      "name": "03 - Login Super Admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{superAdminUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('token', r.token);",
+              "pm.collectionVariables.set('superAdminUserId', r.user.id);",
+              "pm.collectionVariables.set('superAdminOrgId', r.user.orgId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Auth Me (Super Admin)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      }
+    },
+    {
+      "name": "05 - List Organizations",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/organizations?page=1&limit=20"
+      }
+    },
+    {
+      "name": "06 - Create Organization",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('newOrgName', 'Postman Org ' + Date.now());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('newOrgId', r.organization.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{newOrgName}}\",\n  \"settings\": {\n    \"timezone\": \"UTC\",\n    \"source\": \"postman\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/organizations"
+      }
+    },
+    {
+      "name": "07 - Update Organization",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{newOrgName}} Updated\",\n  \"settings\": {\n    \"timezone\": \"UTC\",\n    \"updatedBy\": \"postman\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/organizations/{{newOrgId}}"
+      }
+    },
+    {
+      "name": "08 - List Users",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/users?orgId={{superAdminOrgId}}&page=1&limit=20"
+      }
+    },
+    {
+      "name": "09 - Create Temp User",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('tempUsername', 'tmp_user_' + Date.now());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('tempUserId', r.user.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{tempUsername}}\",\n  \"password\": \"{{defaultPassword}}\",\n  \"role\": \"client\",\n  \"orgId\": \"{{superAdminOrgId}}\",\n  \"isSessionExempt\": false\n}"
+        },
+        "url": "{{baseUrl}}/api/users"
+      }
+    },
+    {
+      "name": "10 - Update Temp User",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isActive\": true\n}"
+        },
+        "url": "{{baseUrl}}/api/users/{{tempUserId}}"
+      }
+    },
+    {
+      "name": "11 - Login Lawyer",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{lawyerUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('token', r.token);",
+              "pm.collectionVariables.set('lawyerUserId', r.user.id);",
+              "pm.collectionVariables.set('lawyerOrgId', r.user.orgId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - List Lawyers",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/lawyers"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.data && r.data.length > 0) pm.collectionVariables.set('selectedLawyerId', r.data[0].id);",
+              "if (!pm.collectionVariables.get('selectedLawyerId')) pm.collectionVariables.set('selectedLawyerId', pm.collectionVariables.get('lawyerUserId'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - List Availability",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/availability?lawyerId={{selectedLawyerId}}"
+      }
+    },
+    {
+      "name": "14 - Create Availability",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"dayOfWeek\": 1,\n  \"startTime\": \"09:00\",\n  \"endTime\": \"11:00\",\n  \"slotDurationMin\": 30\n}"
+        },
+        "url": "{{baseUrl}}/api/availability"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('availabilityId', r.slot.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Update Availability",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"startTime\": \"09:30\",\n  \"endTime\": \"11:30\",\n  \"isActive\": true\n}"
+        },
+        "url": "{{baseUrl}}/api/availability/{{availabilityId}}"
+      }
+    },
+    {
+      "name": "16 - Delete Availability",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/availability/{{availabilityId}}"
+      }
+    },
+    {
+      "name": "17 - Login Client",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{clientUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('token', r.token);",
+              "pm.collectionVariables.set('clientUserId', r.user.id);",
+              "pm.collectionVariables.set('clientOrgId', r.user.orgId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - List Bookings",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/bookings?page=1&limit=20"
+      }
+    },
+    {
+      "name": "19 - Create Booking (Confirm + Complete Flow)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const now = new Date();",
+              "const plus3h = new Date(now.getTime() + 3 * 60 * 60 * 1000).toISOString();",
+              "pm.collectionVariables.set('scheduledAt1', plus3h);",
+              "pm.collectionVariables.set('idem1', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('booking1Id', r.booking.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lawyerId\": \"{{selectedLawyerId}}\",\n  \"type\": \"consultation\",\n  \"scheduledAt\": \"{{scheduledAt1}}\",\n  \"idempotencyKey\": \"{{idem1}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/bookings"
+      }
+    },
+    {
+      "name": "20 - Get Booking by Id",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/bookings/{{booking1Id}}"
+      }
+    },
+    {
+      "name": "21 - Create Booking (Cancel Flow)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const now = new Date();",
+              "const plus1h = new Date(now.getTime() + 60 * 60 * 1000).toISOString();",
+              "pm.collectionVariables.set('scheduledAt2', plus1h);",
+              "pm.collectionVariables.set('idem2', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('booking2Id', r.booking.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lawyerId\": \"{{selectedLawyerId}}\",\n  \"type\": \"consultation\",\n  \"scheduledAt\": \"{{scheduledAt2}}\",\n  \"idempotencyKey\": \"{{idem2}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/bookings"
+      }
+    },
+    {
+      "name": "22 - Create Booking (Reschedule Flow)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const now = new Date();",
+              "const plus5h = new Date(now.getTime() + 5 * 60 * 60 * 1000).toISOString();",
+              "pm.collectionVariables.set('scheduledAt3', plus5h);",
+              "pm.collectionVariables.set('idem3', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('booking3Id', r.booking.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lawyerId\": \"{{selectedLawyerId}}\",\n  \"type\": \"consultation\",\n  \"scheduledAt\": \"{{scheduledAt3}}\",\n  \"idempotencyKey\": \"{{idem3}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/bookings"
+      }
+    },
+    {
+      "name": "23 - Login Lawyer (for booking actions)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{lawyerUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 - Confirm Booking #1",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/bookings/{{booking1Id}}/confirm"
+      }
+    },
+    {
+      "name": "25 - Confirm Booking #2",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/bookings/{{booking2Id}}/confirm"
+      }
+    },
+    {
+      "name": "26 - Complete Booking #1",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/bookings/{{booking1Id}}/complete"
+      }
+    },
+    {
+      "name": "27 - Login Client (for review/cancel/reschedule)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{clientUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 - Cancel Booking #2",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"Client no longer needs this slot\"\n}"
+        },
+        "url": "{{baseUrl}}/api/bookings/{{booking2Id}}/cancel"
+      }
+    },
+    {
+      "name": "29 - Reschedule Booking #3",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const plus8h = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();",
+              "pm.collectionVariables.set('rescheduleAt', plus8h);",
+              "pm.collectionVariables.set('idemReschedule', pm.variables.replaceIn('{{$guid}}'));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.newBooking && r.newBooking.id) pm.collectionVariables.set('rescheduledBookingId', r.newBooking.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"newScheduledAt\": \"{{rescheduleAt}}\",\n  \"idempotencyKey\": \"{{idemReschedule}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/bookings/{{booking3Id}}/reschedule"
+      }
+    },
+    {
+      "name": "30 - Create Review (Client -> Lawyer)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{booking1Id}}\",\n  \"timeliness\": 5,\n  \"professionalism\": 5,\n  \"communication\": 5,\n  \"comment\": \"Excellent handling and communication\"\n}"
+        },
+        "url": "{{baseUrl}}/api/reviews"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('reviewFromClientId', r.review.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "31 - Login Lawyer (for reciprocal review + dispute)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{lawyerUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('token', r.token);",
+              "pm.collectionVariables.set('lawyerUserId', r.user.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "32 - Create Review (Lawyer -> Client)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": \"{{booking1Id}}\",\n  \"timeliness\": 5,\n  \"professionalism\": 4,\n  \"communication\": 5,\n  \"comment\": \"Client was responsive and prepared\"\n}"
+        },
+        "url": "{{baseUrl}}/api/reviews"
+      }
+    },
+    {
+      "name": "33 - List Reviews by Booking",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/reviews?bookingId={{booking1Id}}"
+      }
+    },
+    {
+      "name": "34 - Create Dispute (Lawyer disputes client review)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reviewId\": \"{{reviewFromClientId}}\",\n  \"reason\": \"Requesting review correction due to material factual mismatch.\"\n}"
+        },
+        "url": "{{baseUrl}}/api/disputes"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('disputeId', r.dispute.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "35 - Login Admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "pm.collectionVariables.set('token', r.token);",
+              "pm.collectionVariables.set('adminUserId', r.user.id);",
+              "pm.collectionVariables.set('adminOrgId', r.user.orgId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "36 - List Disputes",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/disputes?page=1&limit=20"
+      }
+    },
+    {
+      "name": "37 - Resolve Dispute",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"resolution\": \"upheld\",\n  \"notes\": \"Resolved through admin review from Postman workflow.\"\n}"
+        },
+        "url": "{{baseUrl}}/api/disputes/{{disputeId}}/resolve"
+      }
+    },
+    {
+      "name": "38 - Credit History (Admin views client)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/credit/{{clientUserId}}?page=1&limit=20"
+      }
+    },
+    {
+      "name": "39 - Login Client (notifications/credit)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{clientUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "40 - Credit History (Client self)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/credit/{{clientUserId}}?page=1&limit=20"
+      }
+    },
+    {
+      "name": "41 - List Notifications",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/notifications?page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.data && r.data.length > 0) pm.collectionVariables.set('notificationId', r.data[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "42 - Mark Notification Read",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/notifications/{{notificationId}}/read"
+      }
+    },
+    {
+      "name": "43 - Mark All Notifications Read",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/notifications/read-all"
+      }
+    },
+    {
+      "name": "44 - Login Admin (jobs/reports/config)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "45 - List Jobs",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/jobs?page=1&limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const r = pm.response.json();",
+              "if (r.data && r.data.length > 0) pm.collectionVariables.set('jobId', r.data[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "46 - Get Job by Id",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.collectionVariables.get('jobId')) pm.collectionVariables.set('jobId', '00000000-0000-0000-0000-000000000000');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/jobs/{{jobId}}"
+      }
+    },
+    {
+      "name": "47 - Reports Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/reports/dashboard"
+      }
+    },
+    {
+      "name": "48 - Reports Export CSV",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/reports/export?format=csv"
+      }
+    },
+    {
+      "name": "49 - Reports Export XLSX",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/reports/export?format=xlsx"
+      }
+    },
+    {
+      "name": "50 - List Report Subscriptions",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/report-subscriptions"
+      }
+    },
+    {
+      "name": "51 - Create Report Subscription",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reportType\": \"weekly_ops\",\n  \"filters\": {\n    \"scope\": \"all\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/report-subscriptions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('reportSubId', pm.response.json().subscription.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "52 - Update Report Subscription",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isActive\": true,\n  \"filters\": {\n    \"scope\": \"all\",\n    \"priority\": \"high\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/report-subscriptions/{{reportSubId}}"
+      }
+    },
+    {
+      "name": "53 - Delete Report Subscription",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/report-subscriptions/{{reportSubId}}"
+      }
+    },
+    {
+      "name": "54 - Admin System Status",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/admin/system-status"
+      }
+    },
+    {
+      "name": "55 - Confirm Key Backup",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/admin/confirm-key-backup"
+      }
+    },
+    {
+      "name": "56 - Login Super Admin (audit/webhooks/super ops)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{superAdminUsername}}\",\n  \"password\": \"{{defaultPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "57 - Admin Audit Log (super_admin)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/admin/audit-log?page=1&limit=20"
+      }
+    },
+    {
+      "name": "58 - List Webhooks",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/webhooks"
+      }
+    },
+    {
+      "name": "59 - Create Webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://example.com/webhook\",\n  \"events\": [\"booking.created\", \"booking.completed\"],\n  \"secret\": \"MyStrongWebhookSecret123!\"\n}"
+        },
+        "url": "{{baseUrl}}/api/webhooks"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('webhookId', pm.response.json().webhook.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "60 - Update Webhook",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://example.com/webhook-updated\",\n  \"events\": [\"booking.created\"],\n  \"isActive\": true\n}"
+        },
+        "url": "{{baseUrl}}/api/webhooks/{{webhookId}}"
+      }
+    },
+    {
+      "name": "61 - Rotate Webhook Secret",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"secret\": \"MyRotatedWebhookSecret456!\"\n}"
+        },
+        "url": "{{baseUrl}}/api/webhooks/{{webhookId}}/rotate-secret"
+      }
+    },
+    {
+      "name": "62 - List Config Dictionaries",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/config/dictionaries"
+      }
+    },
+    {
+      "name": "63 - Create Config Dictionary",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": \"matter_type\",\n  \"key\": \"postman_demo\",\n  \"value\": {\n    \"label\": \"Postman Demo\",\n    \"active\": true\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/config/dictionaries"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('dictionaryId', pm.response.json().entry.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "64 - Update Config Dictionary",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"value\": {\n    \"label\": \"Postman Demo Updated\",\n    \"active\": true\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/config/dictionaries/{{dictionaryId}}"
+      }
+    },
+    {
+      "name": "65 - Delete Config Dictionary",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/config/dictionaries/{{dictionaryId}}"
+      }
+    },
+    {
+      "name": "66 - List Workflow Steps",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/config/workflow-steps"
+      }
+    },
+    {
+      "name": "67 - Create Workflow Step",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workflowType\": \"intake\",\n  \"stepOrder\": 99,\n  \"name\": \"Postman Step\",\n  \"config\": {\n    \"required\": false\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/config/workflow-steps"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('workflowStepId', pm.response.json().step.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "68 - Update Workflow Step",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Postman Step Updated\",\n  \"stepOrder\": 100,\n  \"config\": {\n    \"required\": true\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/config/workflow-steps/{{workflowStepId}}"
+      }
+    },
+    {
+      "name": "69 - Delete Workflow Step",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/config/workflow-steps/{{workflowStepId}}"
+      }
+    },
+    {
+      "name": "70 - Delete Temp User (super_admin only)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/users/{{tempUserId}}"
+      }
+    },
+    {
+      "name": "71 - Logout",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": "{{baseUrl}}/api/auth/logout"
+      }
+    }
+  ]
+}

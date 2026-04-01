@@ -1,0 +1,108 @@
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { authorize } from '../plugins/authorize.plugin.js';
+import { encrypt } from '../../infrastructure/encryption/index.js';
+
+const createWebhookSchema = z.object({
+  url: z.string().url(),
+  events: z.array(z.string()),
+  secret: z.string().min(8),
+});
+
+const rotateSecretSchema = z.object({
+  secret: z.string().min(8),
+});
+
+function maskSecret(encrypted: string): string {
+  return '••••••••';
+}
+
+function sanitizeWebhook(row: any) {
+  return {
+    id: row.id,
+    org_id: row.org_id,
+    url: row.url,
+    events: typeof row.events === 'string' ? JSON.parse(row.events) : row.events,
+    secret: maskSecret(row.secret),
+    is_active: row.is_active,
+    created_at: row.created_at,
+  };
+}
+
+export default async function webhookRoutes(app: FastifyInstance) {
+  // GET /api/webhooks — returns masked secrets
+  app.get('/api/webhooks', {
+    preHandler: [app.authenticate, authorize('admin', 'super_admin')],
+  }, async (request: FastifyRequest) => {
+    const db = request.db;
+    const rows = await db('webhook_configs').where({ org_id: request.user.orgId });
+    return { data: rows.map(sanitizeWebhook) };
+  });
+
+  // POST /api/webhooks
+  app.post('/api/webhooks', {
+    preHandler: [app.authenticate, authorize('admin', 'super_admin')],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const parsed = createWebhookSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
+    }
+
+    const db = request.db;
+
+    const [webhook] = await db('webhook_configs').insert({
+      org_id: request.user.orgId,
+      url: parsed.data.url,
+      events: JSON.stringify(parsed.data.events),
+      secret: encrypt(parsed.data.secret),
+    }).returning('*');
+
+    return reply.status(201).send({ webhook: sanitizeWebhook(webhook) });
+  });
+
+  // PATCH /api/webhooks/:id
+  app.patch('/api/webhooks/:id', {
+    preHandler: [app.authenticate, authorize('admin', 'super_admin')],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const body = request.body as Record<string, any>;
+    const db = request.db;
+
+    const [webhook] = await db('webhook_configs')
+      .where({ id, org_id: request.user.orgId })
+      .update({
+        url: body.url,
+        events: body.events ? JSON.stringify(body.events) : undefined,
+        is_active: body.isActive,
+      })
+      .returning('*');
+
+    if (!webhook) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Webhook not found' });
+    }
+    return { webhook: sanitizeWebhook(webhook) };
+  });
+
+  // POST /api/webhooks/:id/rotate-secret — replace secret without exposing current value
+  app.post('/api/webhooks/:id/rotate-secret', {
+    preHandler: [app.authenticate, authorize('admin', 'super_admin')],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const parsed = rotateSecretSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
+    }
+
+    const db = request.db;
+
+    const [webhook] = await db('webhook_configs')
+      .where({ id, org_id: request.user.orgId })
+      .update({ secret: encrypt(parsed.data.secret) })
+      .returning('*');
+
+    if (!webhook) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Webhook not found' });
+    }
+    return { webhook: sanitizeWebhook(webhook), message: 'Secret rotated successfully' };
+  });
+}

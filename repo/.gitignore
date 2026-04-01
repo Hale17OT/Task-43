@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+.temp/
+coverage/
+.angular/
+test-results/
+playwright-report/
+.claude/
