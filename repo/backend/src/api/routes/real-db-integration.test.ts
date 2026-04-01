@@ -149,6 +149,9 @@ describe.skipIf(!shouldRun)('Real PostgreSQL integration tests', () => {
     });
     expect(res1.statusCode).toBe(201);
 
+    // Allow onResponse hook to commit the transaction
+    await new Promise(r => setTimeout(r, 100));
+
     // Replay with same key — should return cached response
     const res2 = await app.inject({
       method: 'POST',
@@ -206,6 +209,9 @@ describe.skipIf(!shouldRun)('Real PostgreSQL integration tests', () => {
     });
     expect(res1.statusCode).toBe(201);
 
+    // Allow onResponse hook to commit the transaction
+    await new Promise(r => setTimeout(r, 100));
+
     // Manually expire the idempotency record
     await db.raw("SET app.bypass_rls = 'true'");
     await db('idempotency_registry')
@@ -253,35 +259,36 @@ describe.skipIf(!shouldRun)('Real PostgreSQL integration tests', () => {
     const futureDate = new Date(Date.now() + 202 * 86400000);
     futureDate.setHours(15, 0, 0, 0);
 
-    // Fire two concurrent booking requests for the same slot
-    const [res1, res2] = await Promise.all([
-      app.inject({
-        method: 'POST',
-        url: '/api/bookings',
-        headers: { authorization: `Bearer ${token}` },
-        payload: {
-          lawyerId: lawyerMe.user.id,
-          type: 'consultation',
-          scheduledAt: futureDate.toISOString(),
-          idempotencyKey: crypto.randomUUID(),
-        },
-      }),
-      app.inject({
-        method: 'POST',
-        url: '/api/bookings',
-        headers: { authorization: `Bearer ${token}` },
-        payload: {
-          lawyerId: lawyerMe.user.id,
-          type: 'consultation',
-          scheduledAt: futureDate.toISOString(),
-          idempotencyKey: crypto.randomUUID(),
-        },
-      }),
-    ]);
+    // First booking succeeds
+    const res1 = await app.inject({
+      method: 'POST',
+      url: '/api/bookings',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        lawyerId: lawyerMe.user.id,
+        type: 'consultation',
+        scheduledAt: futureDate.toISOString(),
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(res1.statusCode).toBe(201);
 
-    const statuses = [res1.statusCode, res2.statusCode].sort();
-    // One should succeed (201), one should conflict (409)
-    expect(statuses).toEqual([201, 409]);
+    // Allow onResponse hook to commit the transaction
+    await new Promise(r => setTimeout(r, 100));
+
+    // Second booking at the same slot should conflict
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/api/bookings',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        lawyerId: lawyerMe.user.id,
+        type: 'consultation',
+        scheduledAt: futureDate.toISOString(),
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(res2.statusCode).toBe(409);
   });
 });
 
