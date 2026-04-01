@@ -10,7 +10,7 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['list']],
   use: {
     // Frontend is served by nginx on port 4200, which proxies /api to backend
-    baseURL: 'http://localhost:4200',
+    baseURL: process.env.BASE_URL || 'http://localhost:4200',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

@@ -41,5 +41,25 @@ services:
     ports:
       - "4200:80"
 
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: test
+    profiles:
+      - test
+
+  e2e:
+    build:
+      context: ./e2e
+      dockerfile: Dockerfile
+    depends_on:
+      - frontend
+      - backend
+    environment:
+      BASE_URL: http://frontend:80
+    profiles:
+      - test
+
 volumes:
   pgdata:
