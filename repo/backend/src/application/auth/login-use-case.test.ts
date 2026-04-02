@@ -103,7 +103,7 @@ describe('LoginUseCase', () => {
     expect(userRepo.incrementFailedAttempts).toHaveBeenCalledWith('user-1');
   });
 
-  it('throws 423 when account is locked', async () => {
+  it('throws 401 with retryAfterSeconds when account is locked', async () => {
     const user = createMockUser({
       lockedUntil: new Date(Date.now() + 600000), // 10 min from now
     });
@@ -113,7 +113,7 @@ describe('LoginUseCase', () => {
       await useCase.execute({ username: 'testuser', password: 'any' });
       expect.fail('Should have thrown');
     } catch (e: any) {
-      expect(e.statusCode).toBe(423);
+      expect(e.statusCode).toBe(401);
       expect(e.retryAfterSeconds).toBeGreaterThan(0);
     }
   });
@@ -129,7 +129,7 @@ describe('LoginUseCase', () => {
       await useCase.execute({ username: 'testuser', password: 'wrong' });
       expect.fail('Should have thrown');
     } catch (e: any) {
-      expect(e.statusCode).toBe(423);
+      expect(e.statusCode).toBe(401);
       expect(e.retryAfterSeconds).toBeGreaterThan(0);
       expect(e.retryAfterSeconds).toBeLessThanOrEqual(15 * 60);
       expect(userRepo.update).toHaveBeenCalled();

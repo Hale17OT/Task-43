@@ -36,6 +36,14 @@ import { ExportButtonComponent } from '../../shared/components/export-button/exp
             </div>
           }
           <div class="form-group">
+            <label>Role</label>
+            <select class="input" formControlName="role">
+              <option value="">All Roles</option>
+              <option value="client">Client</option>
+              <option value="lawyer">Lawyer</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label>From</label>
             <input class="input" type="date" formControlName="from" />
           </div>
@@ -103,6 +111,7 @@ export class ReportViewerComponent implements OnInit {
   ) {
     this.filterForm = this.fb.group({
       orgId: [''],
+      role: [''],
       from: [''],
       to: [''],
     });
@@ -137,6 +146,7 @@ export class ReportViewerComponent implements OnInit {
     const params: any = {};
     const f = this.filterForm.value;
     if (f.orgId) params.orgId = f.orgId;
+    if (f.role) params.role = f.role;
     if (f.from) params.from = f.from;
     if (f.to) params.to = f.to;
 
@@ -154,6 +164,7 @@ export class ReportViewerComponent implements OnInit {
     const params: any = { format };
     const f = this.filterForm.value;
     if (f.orgId) params.orgId = f.orgId;
+    if (f.role) params.role = f.role;
     if (f.from) params.from = f.from;
     if (f.to) params.to = f.to;
     return this.reportsService.exportUrl(params);

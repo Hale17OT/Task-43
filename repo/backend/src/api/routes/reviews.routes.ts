@@ -8,6 +8,8 @@ import { KnexUserRepository } from '../../infrastructure/database/repositories/u
 import { isWithinDisputeWindow } from '../../domain/entities/review.js';
 import { CreditScore } from '../../domain/value-objects/credit-score.js';
 import { WebhookDispatcher } from '../../infrastructure/webhooks/dispatcher.js';
+import { safePagination } from '../schemas/pagination.js';
+import { logger } from '../../infrastructure/logging/index.js';
 
 export default async function reviewRoutes(app: FastifyInstance) {
   // GET /api/reviews
@@ -40,8 +42,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'You can only view your own reviews' });
       }
       return repo.findReviewsByRole(query.reviewerId, 'reviewer', {
-        page: query.page ? parseInt(query.page) : 1,
-        limit: query.limit ? parseInt(query.limit) : 20,
+        ...safePagination(query),
       });
     }
 
@@ -50,8 +51,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'FORBIDDEN', message: 'You can only view your own reviews' });
       }
       return repo.findReviewsByRole(query.revieweeId, 'reviewee', {
-        page: query.page ? parseInt(query.page) : 1,
-        limit: query.limit ? parseInt(query.limit) : 20,
+        ...safePagination(query),
       });
     }
 
@@ -60,10 +60,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: 'FORBIDDEN', message: 'You can only view your own reviews' });
     }
 
-    return repo.findReviewsByUserId(query.userId || userId, {
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
-    });
+    return repo.findReviewsByUserId(query.userId || userId, safePagination(query));
   });
 
   // POST /api/reviews
@@ -114,7 +111,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
       comment: parsed.data.comment,
     });
 
-    new WebhookDispatcher(db).dispatch(request.user.orgId, 'review.created', { review }).catch(() => {});
+    new WebhookDispatcher(db).dispatch(request.user.orgId, 'review.created', { review }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
     return reply.status(201).send({ review });
   });
 
@@ -130,8 +127,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
     return repo.findDisputes({
       status: query.status,
       orgId: role === 'super_admin' ? undefined : orgId,
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
+      ...safePagination(query),
     });
   });
 
@@ -228,17 +224,18 @@ export default async function reviewRoutes(app: FastifyInstance) {
     const isUpheld = parsed.data.resolution === 'upheld';
     const newStatus = isUpheld ? 'resolved' : 'dismissed';
 
-    // If dismissed, re-apply escrowed penalties
+    // If dismissed, re-apply escrowed penalties atomically
     if (!isUpheld && dispute.penaltyEscrowed) {
-      const user = await userRepo.findById(dispute.appellantId);
-      if (user) {
-        let totalPenalty = 0;
-        for (const entry of dispute.penaltyEscrowed as any[]) {
-          totalPenalty += entry.changeAmount;
-        }
-        const newScore = CreditScore.create(user.creditScore + totalPenalty);
-        await userRepo.updateCreditScore(user.id, newScore.value);
+      let totalPenalty = 0;
+      for (const entry of dispute.penaltyEscrowed as any[]) {
+        totalPenalty += entry.changeAmount;
       }
+      // Atomic credit score update — avoids race with concurrent modifications
+      await db.raw(`
+        UPDATE users
+        SET credit_score = LEAST(100, GREATEST(0, credit_score + ?))
+        WHERE id = ?
+      `, [totalPenalty, dispute.appellantId]);
     }
 
     await creditRepo.resolveEscrow(id, !isUpheld);

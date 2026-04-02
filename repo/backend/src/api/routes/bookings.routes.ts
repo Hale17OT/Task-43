@@ -11,6 +11,8 @@ import { CreditScore } from '../../domain/value-objects/credit-score.js';
 import { encrypt } from '../../infrastructure/encryption/index.js';
 import { CREDIT_THRESHOLD } from '../../config/credit-rules.js';
 import { WebhookDispatcher } from '../../infrastructure/webhooks/dispatcher.js';
+import { safePagination } from '../schemas/pagination.js';
+import { logger } from '../../infrastructure/logging/index.js';
 
 export default async function bookingRoutes(app: FastifyInstance) {
   // GET /api/bookings
@@ -24,8 +26,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
     const { role, userId, orgId } = request.user;
 
     const filters: Record<string, any> = {
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
+      ...safePagination(query),
     };
 
     if (query.status) filters.status = query.status;
@@ -180,7 +181,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
 
       // Dispatch webhook
       const dispatcher = new WebhookDispatcher(db);
-      dispatcher.dispatch(request.user.orgId, 'booking.created', { booking }).catch(() => {});
+      dispatcher.dispatch(request.user.orgId, 'booking.created', { booking }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
 
       return reply.status(201).send(responseBody);
     } catch (err: any) {
@@ -209,7 +210,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
     }
 
     const updated = await repo.updateStatus(id, 'confirmed');
-    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.confirmed', { booking: updated }).catch(() => {});
+    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.confirmed', { booking: updated }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
     return { booking: updated };
   });
 
@@ -231,7 +232,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
     }
 
     const updated = await repo.updateStatus(id, 'declined');
-    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.declined', { booking: updated }).catch(() => {});
+    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.declined', { booking: updated }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
     return { booking: updated };
   });
 
@@ -286,7 +287,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
     }
 
     const updated = await bookingRepo.updateStatus(id, 'cancelled', extra);
-    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.cancelled', { booking: updated }).catch(() => {});
+    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.cancelled', { booking: updated }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
     return { booking: updated, creditPenaltyApplied };
   });
 
@@ -373,7 +374,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
       }
     }
 
-    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.completed', { booking: updated }).catch(() => {});
+    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.completed', { booking: updated }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
     return { booking: updated, lateDeliveryApplied };
   });
 
@@ -425,7 +426,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
       });
     }
 
-    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.no_show', { booking: updated }).catch(() => {});
+    new WebhookDispatcher(db).dispatch(request.user.orgId, 'booking.no_show', { booking: updated }).catch((err: any) => logger.warn({ err: err?.message }, 'Webhook dispatch failed'));
     return { booking: updated, creditPenalty: -10 };
   });
 
@@ -469,10 +470,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Lawyer not found or not available' });
     }
 
-    // Mark old booking as rescheduled
-    await bookingRepo.updateStatus(id, 'rescheduled');
-
-    // Create new booking
+    // Create new booking and mark old as rescheduled atomically
     const newScheduledAt = new Date(parsed.data.newScheduledAt);
     const newBooking = await db.transaction(async (trx) => {
       const txRepo = new KnexBookingRepository(trx);
@@ -482,6 +480,9 @@ export default async function bookingRoutes(app: FastifyInstance) {
       if (conflict) {
         throw Object.assign(new Error('New time slot unavailable'), { statusCode: 409 });
       }
+
+      // Mark old booking as rescheduled inside the transaction
+      await txRepo.updateStatus(id, 'rescheduled');
 
       return txRepo.create({
         clientId: booking.clientId,

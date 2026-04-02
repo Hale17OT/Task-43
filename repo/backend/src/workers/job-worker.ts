@@ -3,6 +3,7 @@ import { KnexJobRepository } from '../infrastructure/database/repositories/job-r
 import { KnexNotificationRepository } from '../infrastructure/database/repositories/notification-repository.js';
 import { logger } from '../infrastructure/logging/index.js';
 import { v4 as uuid } from 'uuid';
+import { withSystemContext } from './with-system-context.js';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 const BATCH_SIZE = 5;
@@ -43,29 +44,31 @@ export class JobWorker {
     if (!this.running) return;
 
     try {
-      const jobRepo = new KnexJobRepository(this.db);
-      const jobs = await jobRepo.claimJobs(this.workerId, BATCH_SIZE, this.shardKeys);
+      await withSystemContext(this.db, async (trx) => {
+        const jobRepo = new KnexJobRepository(trx);
+        const jobs = await jobRepo.claimJobs(this.workerId, BATCH_SIZE, this.shardKeys);
 
-      for (const job of jobs) {
-        try {
-          await this.executeJob(job);
-          await jobRepo.markCompleted(job.id);
-          logger.info({ jobId: job.id, type: job.type }, 'Job completed');
-        } catch (err: any) {
-          await jobRepo.markFailed(job.id, err.message, job.attempts, job.maxAttempts);
-          logger.error({ jobId: job.id, type: job.type, error: err.message, attempts: job.attempts }, 'Job failed');
+        for (const job of jobs) {
+          try {
+            await this.executeJob(job, trx);
+            await jobRepo.markCompleted(job.id);
+            logger.info({ jobId: job.id, type: job.type }, 'Job completed');
+          } catch (err: any) {
+            await jobRepo.markFailed(job.id, err.message, job.attempts, job.maxAttempts);
+            logger.error({ jobId: job.id, type: job.type, error: err.message, attempts: job.attempts }, 'Job failed');
+          }
         }
-      }
+      });
     } catch (err) {
       logger.error({ err }, 'Job worker poll error');
     }
   }
 
-  private async executeJob(job: any) {
+  private async executeJob(job: any, trx: Knex.Transaction) {
     // Idempotency guard: if this job has an idempotency key, check
     // whether a completed job with the same key already exists.
     if (job.idempotencyKey) {
-      const existing = await this.db('jobs')
+      const existing = await trx('jobs')
         .where({ idempotency_key: job.idempotencyKey, status: 'completed' })
         .whereNot({ id: job.id })
         .first();
@@ -77,25 +80,25 @@ export class JobWorker {
 
     switch (job.type) {
       case 'report-generation':
-        await this.handleReportGeneration(job);
+        await this.handleReportGeneration(job, trx);
         break;
       case 'idempotency-vacuum':
-        await this.handleIdempotencyVacuum();
+        await this.handleIdempotencyVacuum(trx);
         break;
       case 'record-import':
-        await this.handleRecordImport(job);
+        await this.handleRecordImport(job, trx);
         break;
       case 'compliance-check':
-        await this.handleComplianceCheck(job);
+        await this.handleComplianceCheck(job, trx);
         break;
       default:
         throw new Error(`Unknown job type: ${job.type}`);
     }
   }
 
-  private async handleReportGeneration(job: any) {
-    const { userId, reportType, filters } = job.payload;
-    const notifRepo = new KnexNotificationRepository(this.db);
+  private async handleReportGeneration(job: any, trx: Knex.Transaction) {
+    const { userId, reportType } = job.payload;
+    const notifRepo = new KnexNotificationRepository(trx);
 
     await notifRepo.create({
       userId,
@@ -105,14 +108,14 @@ export class JobWorker {
     });
   }
 
-  private async handleIdempotencyVacuum() {
-    const deleted = await this.db('idempotency_registry')
+  private async handleIdempotencyVacuum(trx: Knex.Transaction) {
+    const deleted = await trx('idempotency_registry')
       .where('expires_at', '<', new Date())
       .del();
     logger.info({ deleted }, 'Idempotency vacuum completed');
   }
 
-  private async handleRecordImport(job: any) {
+  private async handleRecordImport(job: any, trx: Knex.Transaction) {
     const { source, orgId, batchSize: configuredBatchSize } = job.payload;
     const importBatchSize = configuredBatchSize ?? 100;
 
@@ -122,7 +125,7 @@ export class JobWorker {
     logger.info({ jobId: job.id, source, orgId, offset, batchSize: importBatchSize }, 'Record import: processing batch');
 
     // Fetch records to import from the source table
-    const records = await this.db(source ?? 'users')
+    const records = await trx(source ?? 'users')
       .where(orgId ? { org_id: orgId } : {})
       .orderBy('created_at', 'asc')
       .limit(importBatchSize)
@@ -135,7 +138,7 @@ export class JobWorker {
 
     // Persist incremental progress so retries can resume
     const newProcessedCount = offset + records.length;
-    await this.db('jobs')
+    await trx('jobs')
       .where({ id: job.id })
       .update({
         payload: JSON.stringify({
@@ -154,7 +157,7 @@ export class JobWorker {
 
     // If there are more records, re-enqueue a continuation job
     if (records.length >= importBatchSize) {
-      const jobRepo = new KnexJobRepository(this.db);
+      const jobRepo = new KnexJobRepository(trx);
       await jobRepo.enqueue({
         type: 'record-import',
         payload: {
@@ -168,7 +171,7 @@ export class JobWorker {
     }
   }
 
-  private async handleComplianceCheck(job: any) {
+  private async handleComplianceCheck(job: any, trx: Knex.Transaction) {
     const { orgId, checkType } = job.payload;
     const findings: Array<{ entity: string; entityId: string; issue: string; severity: string }> = [];
 
@@ -176,7 +179,7 @@ export class JobWorker {
 
     // Check 1: Users with credit score below threshold who have active bookings
     if (!checkType || checkType === 'credit_threshold') {
-      const lowCreditWithBookings = await this.db('users')
+      const lowCreditWithBookings = await trx('users')
         .join('bookings', 'users.id', 'bookings.client_id')
         .where(orgId ? { 'users.org_id': orgId } : {})
         .where('users.credit_score', '<', 20)
@@ -196,7 +199,7 @@ export class JobWorker {
 
     // Check 2: Overdue pending bookings (scheduled in the past, still pending)
     if (!checkType || checkType === 'overdue_bookings') {
-      const overdueBookings = await this.db('bookings')
+      const overdueBookings = await trx('bookings')
         .where(orgId ? { org_id: orgId } : {})
         .where('status', 'pending')
         .where('scheduled_at', '<', new Date())
@@ -214,7 +217,7 @@ export class JobWorker {
 
     // Check 3: Unresolved disputes past deadline
     if (!checkType || checkType === 'expired_disputes') {
-      const expiredDisputes = await this.db('disputes')
+      const expiredDisputes = await trx('disputes')
         .whereIn('status', ['pending', 'under_review'])
         .where('deadline_at', '<', new Date())
         .select('id', 'appellant_id', 'deadline_at');
@@ -230,7 +233,7 @@ export class JobWorker {
     }
 
     // Persist findings in job payload for review
-    await this.db('jobs')
+    await trx('jobs')
       .where({ id: job.id })
       .update({
         payload: JSON.stringify({
@@ -244,11 +247,11 @@ export class JobWorker {
     // Notify admins if there are high-severity findings
     const highSeverity = findings.filter(f => f.severity === 'high');
     if (highSeverity.length > 0 && orgId) {
-      const admins = await this.db('users')
+      const admins = await trx('users')
         .where({ org_id: orgId, role: 'admin', is_active: true })
         .select('id');
 
-      const notifRepo = new KnexNotificationRepository(this.db);
+      const notifRepo = new KnexNotificationRepository(trx);
       for (const admin of admins) {
         await notifRepo.create({
           userId: admin.id,

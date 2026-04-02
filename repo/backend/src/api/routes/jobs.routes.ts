@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authorize } from '../plugins/authorize.plugin.js';
 import { KnexJobRepository } from '../../infrastructure/database/repositories/job-repository.js';
+import { safePagination } from '../schemas/pagination.js';
 
 function withLatency(job: any) {
   const latencyMs = job.startedAt && job.createdAt
@@ -24,8 +25,7 @@ export default async function jobRoutes(app: FastifyInstance) {
       status: query.status,
       type: query.type,
       orgId: role === 'super_admin' ? undefined : orgId,
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
+      ...safePagination(query),
     });
     return { data: result.data.map(withLatency), total: result.total };
   });

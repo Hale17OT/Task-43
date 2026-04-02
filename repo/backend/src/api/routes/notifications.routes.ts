@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { KnexNotificationRepository } from '../../infrastructure/database/repositories/notification-repository.js';
+import { safePagination } from '../schemas/pagination.js';
 
 export default async function notificationRoutes(app: FastifyInstance) {
   // GET /api/notifications
@@ -13,8 +14,7 @@ export default async function notificationRoutes(app: FastifyInstance) {
 
     return repo.findByUserId(request.user.userId, {
       unread: query.unread === 'true',
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
+      ...safePagination(query),
     });
   });
 

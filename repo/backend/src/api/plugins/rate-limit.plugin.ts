@@ -2,15 +2,15 @@ import fp from 'fastify-plugin';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { Knex } from 'knex';
 
-async function consumeToken(db: Knex, bucketId: string, maxTokens: number, refillRate: number): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
+async function consumeToken(db: Knex, bucketId: string, maxTokens: number, refillRate: number, ownerUserId?: string, ownerOrgId?: string): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
   const now = new Date();
 
-  // Upsert bucket
+  // Upsert bucket (with RLS-safe owner columns)
   await db.raw(`
-    INSERT INTO rate_limit_buckets (id, tokens, max_tokens, refill_rate, last_refill_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO rate_limit_buckets (id, tokens, max_tokens, refill_rate, last_refill_at, owner_user_id, owner_org_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (id) DO NOTHING
-  `, [bucketId, maxTokens, maxTokens, refillRate, now]);
+  `, [bucketId, maxTokens, maxTokens, refillRate, now, ownerUserId ?? null, ownerOrgId ?? null]);
 
   // Atomic refill + consume
   const result = await db.raw(`
@@ -40,7 +40,7 @@ export async function rateLimitBooking(request: FastifyRequest, reply: FastifyRe
   const db = request.db;
 
   // Per-user limit: 20/min = 0.333/sec
-  const userResult = await consumeToken(db, `user:${userId}`, 20, 20 / 60);
+  const userResult = await consumeToken(db, `user:${userId}`, 20, 20 / 60, userId, undefined);
   if (!userResult.allowed) {
     return reply.status(429).send({
       error: 'RATE_LIMITED',
@@ -50,7 +50,7 @@ export async function rateLimitBooking(request: FastifyRequest, reply: FastifyRe
   }
 
   // Per-org limit: 200/min = 3.333/sec
-  const orgResult = await consumeToken(db, `org:${orgId}`, 200, 200 / 60);
+  const orgResult = await consumeToken(db, `org:${orgId}`, 200, 200 / 60, undefined, orgId);
   if (!orgResult.allowed) {
     return reply.status(429).send({
       error: 'RATE_LIMITED',

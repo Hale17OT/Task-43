@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { authorize } from '../plugins/authorize.plugin.js';
+import { safePagination } from '../schemas/pagination.js';
 
 export default async function adminRoutes(app: FastifyInstance) {
   // GET /api/admin/system-status
@@ -14,9 +15,9 @@ export default async function adminRoutes(app: FastifyInstance) {
     };
   });
 
-  // POST /api/admin/confirm-key-backup
+  // POST /api/admin/confirm-key-backup (super_admin only — global system config)
   app.post('/api/admin/confirm-key-backup', {
-    preHandler: [app.authenticate, authorize('admin', 'super_admin')],
+    preHandler: [app.authenticate, authorize('super_admin')],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const db = request.db;
 
@@ -40,8 +41,7 @@ export default async function adminRoutes(app: FastifyInstance) {
     const db = request.db;
 
     const query = request.query as Record<string, string>;
-    const page = parseInt(query.page ?? '1');
-    const limit = parseInt(query.limit ?? '50');
+    const { page, limit } = safePagination(query);
 
     let q = db('audit_log');
     if (query.entityType) q = q.where({ entity_type: query.entityType });

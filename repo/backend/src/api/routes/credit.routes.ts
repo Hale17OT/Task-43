@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { KnexCreditRepository } from '../../infrastructure/database/repositories/credit-repository.js';
 import { KnexUserRepository } from '../../infrastructure/database/repositories/user-repository.js';
+import { safePagination } from '../schemas/pagination.js';
 
 export default async function creditRoutes(app: FastifyInstance) {
   // GET /api/credit/:userId
@@ -38,10 +39,7 @@ export default async function creditRoutes(app: FastifyInstance) {
     }
 
     const query = request.query as Record<string, string>;
-    const history = await creditRepo.getHistory(userId, {
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
-    });
+    const history = await creditRepo.getHistory(userId, safePagination(query));
 
     return { creditScore: user.creditScore, ...history };
   });

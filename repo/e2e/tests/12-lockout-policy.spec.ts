@@ -8,13 +8,14 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
   const wrongPassword = 'WrongPassword999!';
   const correctPassword = 'SecurePass1!';
 
-  test('5 consecutive wrong passwords trigger 423 lockout with ~900s retry', async ({ page }) => {
+  test('5 consecutive wrong passwords trigger lockout with ~900s retry', async ({ page }) => {
     // First, ensure the account is unlocked by logging in successfully
     const unlockRes = await page.request.post('/api/auth/login', {
       data: { username: testUser, password: correctPassword },
     });
-    // Account may already be locked from a prior run; if 423, wait and retry
-    if (unlockRes.status() === 423) {
+    // Account may already be locked from a prior run; if locked it returns 401 with retryAfterSeconds
+    const unlockBody = await unlockRes.json().catch(() => ({}));
+    if (unlockRes.status() === 401 && unlockBody.retryAfterSeconds) {
       // Skip this test run — account is locked from prior test
       test.skip();
       return;
@@ -27,12 +28,11 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
         data: { username: testUser, password: wrongPassword },
       });
 
-      if (i < 5) {
-        // Attempts 1-4: should return 401 (invalid credentials)
-        expect(res.status()).toBe(401);
-      } else {
-        // Attempt 5: should return 423 (account locked)
-        expect(res.status()).toBe(423);
+      // All attempts return 401 (unified response prevents account enumeration)
+      expect(res.status()).toBe(401);
+
+      if (i === 5) {
+        // Attempt 5: should include retryAfterSeconds indicating lockout
         const body = await res.json();
         expect(body.retryAfterSeconds).toBeDefined();
         // Should be approximately 900 seconds (15 minutes)
@@ -41,16 +41,16 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
       }
     }
 
-    // Verify account is now locked — even correct password should fail with 423
+    // Verify account is now locked — even correct password should fail with 401 + retryAfterSeconds
     const lockedRes = await page.request.post('/api/auth/login', {
       data: { username: testUser, password: correctPassword },
     });
-    expect(lockedRes.status()).toBe(423);
+    expect(lockedRes.status()).toBe(401);
     const lockedBody = await lockedRes.json();
     expect(lockedBody.retryAfterSeconds).toBeGreaterThan(0);
   });
 
-  test('UI displays lockout countdown when server returns 423', async ({ page }) => {
+  test('UI displays lockout countdown when server returns 401 with retryAfterSeconds', async ({ page }) => {
     await page.goto('/login');
     await page.evaluate(() => localStorage.clear());
 
@@ -58,7 +58,8 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
     const checkRes = await page.request.post('/api/auth/login', {
       data: { username: testUser, password: correctPassword },
     });
-    if (checkRes.status() === 423) {
+    const checkBody = await checkRes.json().catch(() => ({}));
+    if (checkRes.status() === 401 && checkBody.retryAfterSeconds) {
       test.skip();
       return;
     }

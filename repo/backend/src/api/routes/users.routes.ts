@@ -1,9 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import bcrypt from 'bcrypt';
 import { authorize } from '../plugins/authorize.plugin.js';
-import { createUserSchema } from '../schemas/auth.js';
+import { createUserSchema, updateUserSchema } from '../schemas/auth.js';
 import { KnexUserRepository } from '../../infrastructure/database/repositories/user-repository.js';
 import { Password } from '../../domain/value-objects/password.js';
+import { safePagination } from '../schemas/pagination.js';
 
 function sanitizeUser(user: any) {
   return {
@@ -35,8 +36,7 @@ export default async function userRoutes(app: FastifyInstance) {
 
     const result = await userRepo.findByOrgId(targetOrgId, {
       role: query.role,
-      page: query.page ? parseInt(query.page) : 1,
-      limit: query.limit ? parseInt(query.limit) : 20,
+      ...safePagination(query),
     });
 
     return { data: result.data.map(sanitizeUser), total: result.total };
@@ -119,8 +119,12 @@ export default async function userRoutes(app: FastifyInstance) {
     preHandler: [app.authenticate, authorize('admin', 'super_admin')],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, any>;
+    const parsed = updateUserSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
+    }
 
+    const body = parsed.data;
     const db = request.db;
 
     const userRepo = new KnexUserRepository(db);

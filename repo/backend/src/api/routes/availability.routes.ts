@@ -94,6 +94,27 @@ export default async function availabilityRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Availability slot not found' });
     }
 
+    // Validate endTime > startTime when both are being updated
+    const effectiveStart = parsed.data.startTime ?? existing.startTime;
+    const effectiveEnd = parsed.data.endTime ?? existing.endTime;
+    if (effectiveEnd <= effectiveStart) {
+      return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'End time must be after start time' });
+    }
+
+    // Check for overlaps with other slots (excluding this one)
+    if (parsed.data.startTime || parsed.data.endTime) {
+      const overlap = await repo.checkOverlap(
+        request.user.userId,
+        existing.dayOfWeek,
+        effectiveStart,
+        effectiveEnd,
+        id,
+      );
+      if (overlap) {
+        return reply.status(409).send({ error: 'CONFLICT', message: 'Time slot overlaps with existing availability' });
+      }
+    }
+
     const slot = await repo.update(id, parsed.data);
     return { slot };
   });

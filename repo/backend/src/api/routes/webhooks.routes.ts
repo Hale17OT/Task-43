@@ -9,6 +9,13 @@ const createWebhookSchema = z.object({
   secret: z.string().min(8),
 });
 
+const updateWebhookSchema = z.object({
+  url: z.string().url().optional(),
+  events: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
+  targetOrgId: z.string().uuid().optional(),
+}).strict();
+
 const rotateSecretSchema = z.object({
   secret: z.string().min(8),
 });
@@ -29,13 +36,29 @@ function sanitizeWebhook(row: any) {
   };
 }
 
+/**
+ * Resolve the effective org ID for webhook operations.
+ * Super-admins may pass a targetOrgId to manage webhooks for any org.
+ * Regular admins are always scoped to their own org.
+ */
+function resolveOrgId(request: FastifyRequest): string {
+  const { role, orgId } = request.user;
+  if (role === 'super_admin') {
+    const query = request.query as Record<string, string>;
+    const body = request.body as Record<string, string> | undefined;
+    return query?.targetOrgId ?? body?.targetOrgId ?? orgId;
+  }
+  return orgId;
+}
+
 export default async function webhookRoutes(app: FastifyInstance) {
   // GET /api/webhooks — returns masked secrets
   app.get('/api/webhooks', {
     preHandler: [app.authenticate, authorize('admin', 'super_admin')],
   }, async (request: FastifyRequest) => {
     const db = request.db;
-    const rows = await db('webhook_configs').where({ org_id: request.user.orgId });
+    const effectiveOrgId = resolveOrgId(request);
+    const rows = await db('webhook_configs').where({ org_id: effectiveOrgId });
     return { data: rows.map(sanitizeWebhook) };
   });
 
@@ -50,8 +73,10 @@ export default async function webhookRoutes(app: FastifyInstance) {
 
     const db = request.db;
 
+    const effectiveOrgId = resolveOrgId(request);
+
     const [webhook] = await db('webhook_configs').insert({
-      org_id: request.user.orgId,
+      org_id: effectiveOrgId,
       url: parsed.data.url,
       events: JSON.stringify(parsed.data.events),
       secret: encrypt(parsed.data.secret),
@@ -65,11 +90,18 @@ export default async function webhookRoutes(app: FastifyInstance) {
     preHandler: [app.authenticate, authorize('admin', 'super_admin')],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, any>;
+    const parsed = updateWebhookSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
+    }
+
+    const body = parsed.data;
     const db = request.db;
 
+    const effectiveOrgId = resolveOrgId(request);
+
     const [webhook] = await db('webhook_configs')
-      .where({ id, org_id: request.user.orgId })
+      .where({ id, org_id: effectiveOrgId })
       .update({
         url: body.url,
         events: body.events ? JSON.stringify(body.events) : undefined,
@@ -95,8 +127,10 @@ export default async function webhookRoutes(app: FastifyInstance) {
 
     const db = request.db;
 
+    const effectiveOrgId = resolveOrgId(request);
+
     const [webhook] = await db('webhook_configs')
-      .where({ id, org_id: request.user.orgId })
+      .where({ id, org_id: effectiveOrgId })
       .update({ secret: encrypt(parsed.data.secret) })
       .returning('*');
 

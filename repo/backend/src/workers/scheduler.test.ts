@@ -4,7 +4,7 @@ describe('Scheduler report job generation', () => {
   it('generates one job per active subscription immediately (no jitter)', async () => {
     const enqueuedJobs: any[] = [];
 
-    const mockDb: any = (table: string) => {
+    const mockTrx: any = (table: string) => {
       if (table === 'report_subscriptions') {
         return {
           join: () => ({
@@ -26,7 +26,14 @@ describe('Scheduler report job generation', () => {
         }),
       };
     };
-    mockDb.raw = async () => ({ rows: [] });
+    mockTrx.raw = async () => ({ rows: [] });
+    mockTrx.commit = async () => {};
+    mockTrx.rollback = async () => {};
+
+    const mockDb: any = Object.assign(() => ({}), {
+      transaction: async () => mockTrx,
+      raw: async () => ({ rows: [] }),
+    });
 
     const { Scheduler } = await import('./scheduler.js');
     const scheduler = new Scheduler(mockDb);
@@ -59,7 +66,7 @@ describe('Scheduler report job generation', () => {
   it('generates no jobs when no active subscriptions exist', async () => {
     const enqueuedJobs: any[] = [];
 
-    const mockDb: any = (table: string) => {
+    const mockTrx: any = (table: string) => {
       if (table === 'report_subscriptions') {
         return {
           join: () => ({
@@ -78,7 +85,14 @@ describe('Scheduler report job generation', () => {
         }),
       };
     };
-    mockDb.raw = async () => ({ rows: [] });
+    mockTrx.raw = async () => ({ rows: [] });
+    mockTrx.commit = async () => {};
+    mockTrx.rollback = async () => {};
+
+    const mockDb: any = Object.assign(() => ({}), {
+      transaction: async () => mockTrx,
+      raw: async () => ({ rows: [] }),
+    });
 
     const { Scheduler } = await import('./scheduler.js');
     const scheduler = new Scheduler(mockDb);

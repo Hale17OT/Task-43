@@ -18,6 +18,9 @@ export interface AppConfig {
   credit: {
     threshold: number;
   };
+  cors: {
+    origins: string[];
+  };
 }
 
 function requireEnv(name: string, fallback?: string): string {
@@ -67,6 +70,13 @@ export function loadConfig(): AppConfig {
     },
     credit: {
       threshold: 20,
+    },
+    cors: {
+      origins: process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+        : isDev
+          ? ['http://localhost:4200', 'http://localhost:3000', 'http://127.0.0.1:4200', 'http://127.0.0.1:3000']
+          : [],
     },
   };
 }

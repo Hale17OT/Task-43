@@ -7,6 +7,11 @@ const subscriptionSchema = z.object({
   filters: z.record(z.unknown()).optional(),
 });
 
+const updateSubscriptionSchema = z.object({
+  isActive: z.boolean().optional(),
+  filters: z.record(z.unknown()).optional(),
+}).strict();
+
 export default async function reportRoutes(app: FastifyInstance) {
   // GET /api/reports/dashboard
   app.get('/api/reports/dashboard', {
@@ -175,15 +180,18 @@ export default async function reportRoutes(app: FastifyInstance) {
     preHandler: [app.authenticate, authorize('admin', 'super_admin')],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, any>;
+    const parsed = updateSubscriptionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
+    }
+
+    const body = parsed.data;
     const db = request.db;
 
-
-    const isActive = body.isActive ?? body.is_active;
     const [sub] = await db('report_subscriptions')
       .where({ id, user_id: request.user.userId })
       .update({
-        is_active: isActive,
+        is_active: body.isActive,
         filters: body.filters ? JSON.stringify(body.filters) : undefined,
       })
       .returning('*');

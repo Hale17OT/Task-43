@@ -36,7 +36,7 @@ async function main() {
   }
 
   // Build and start server
-  const app = await buildServer();
+  const app = await buildServer(config);
 
   // Store config and db on app for plugins to use
   app.decorate('config', config);

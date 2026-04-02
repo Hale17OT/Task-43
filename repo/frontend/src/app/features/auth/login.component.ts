@@ -162,11 +162,14 @@ export class LoginComponent implements OnInit, OnDestroy {
       },
       error: (err: HttpErrorResponse) => {
         this.loading = false;
-        if (err.status === 423) {
-          const retryAfter = err.error?.retryAfterSeconds ?? 60;
-          this.startLockout(retryAfter);
+        if (err.status === 401 && err.error?.retryAfterSeconds) {
+          // Account locked — server returns 401 with retryAfterSeconds to prevent enumeration
+          this.startLockout(err.error.retryAfterSeconds);
         } else if (err.status === 401) {
           this.errorMessage = 'Invalid username or password.';
+        } else if (err.status === 429) {
+          const retryAfter = err.error?.retryAfterSeconds ?? 60;
+          this.errorMessage = `Too many login attempts. Please try again in ${retryAfter} seconds.`;
         } else {
           this.errorMessage = err.error?.message ?? 'Login failed. Please try again.';
         }

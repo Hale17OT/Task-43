@@ -17,16 +17,18 @@ import adminRoutes from './routes/admin.routes.js';
 import webhookRoutes from './routes/webhooks.routes.js';
 import configRoutes from './routes/config.routes.js';
 import { logger } from '../infrastructure/logging/index.js';
+import { AppConfig } from '../config/index.js';
 
-export async function buildServer(): Promise<FastifyInstance> {
+export async function buildServer(config?: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
     logger: false,
     trustProxy: true,
   });
 
-  // CORS — LAN only
+  // CORS — restricted to configured origins (env CORS_ORIGINS or dev defaults)
+  const allowedOrigins = config?.cors?.origins ?? [];
   await app.register(cors, {
-    origin: true,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
   });
 

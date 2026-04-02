@@ -52,10 +52,10 @@ export class LoginUseCase {
       throw new AuthError(401, 'Account is deactivated');
     }
 
-    // Check lockout
+    // Check lockout — return 401 (same as invalid credentials) to prevent account enumeration
     if (isLockedOut(user)) {
       const remaining = getLockoutRemainingSeconds(user.lockedUntil!);
-      const err = new AuthError(423, `Account locked. Try again in ${remaining} seconds`);
+      const err = new AuthError(401, 'Invalid credentials or account temporarily locked');
       (err as any).retryAfterSeconds = remaining;
       throw err;
     }
@@ -70,7 +70,7 @@ export class LoginUseCase {
           lockedUntil: lockoutExpiry,
         });
         const remaining = getLockoutRemainingSeconds(lockoutExpiry);
-        const err = new AuthError(423, `Account locked after ${newCount} failed attempts. Try again in ${remaining} seconds`);
+        const err = new AuthError(401, 'Invalid credentials or account temporarily locked');
         (err as any).retryAfterSeconds = remaining;
         throw err;
       }

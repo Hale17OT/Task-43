@@ -20,6 +20,9 @@ import { HeaderComponent } from '../header/header.component';
         <app-sidebar />
         <div class="shell-main">
           <app-header />
+          @if (auth.tokenExpiringSoon()) {
+            <div class="expiry-warning">Your session will expire soon. Please save your work and <a (click)="auth.logout()">re-login</a>.</div>
+          }
           @if (timeSync.syncError()) {
             <div class="sync-warning">Time sync unavailable — policy timing may be inaccurate.</div>
           }
@@ -67,6 +70,14 @@ import { HeaderComponent } from '../header/header.component';
       font-size: 1.2rem;
       cursor: pointer;
       padding: 0 4px;
+    }
+    .expiry-warning {
+      background: var(--color-warning, #f59e0b);
+      color: white;
+      padding: 8px 20px;
+      font-size: 0.85rem;
+      text-align: center;
+      a { color: white; text-decoration: underline; cursor: pointer; font-weight: 600; }
     }
     .sync-warning {
       background: var(--color-warning, #f59e0b);

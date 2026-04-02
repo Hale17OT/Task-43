@@ -70,15 +70,15 @@ export class KnexCreditRepository {
 
   async resolveEscrow(disputeId: string, reapply: boolean): Promise<void> {
     if (reapply) {
-      // Keep the entries as-is but mark them as no longer escrowed
+      // Dispute dismissed — penalties stand. Mark entries as no longer escrowed.
       await this.db('credit_score_history')
         .where({ dispute_id: disputeId, is_escrowed: true })
         .update({ is_escrowed: false });
     } else {
-      // Discard escrowed entries — they were reversed
+      // Dispute upheld — penalties reversed. Delete the escrowed entries.
       await this.db('credit_score_history')
         .where({ dispute_id: disputeId, is_escrowed: true })
-        .update({ is_escrowed: false });
+        .del();
     }
   }
 

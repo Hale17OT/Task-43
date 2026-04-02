@@ -69,7 +69,7 @@ import { ShimmerLoaderComponent } from '../../shared/components/shimmer-loader/s
 
       <!-- Reschedule Dialog -->
       @if (rescheduleTarget) {
-        <div class="dialog-overlay" (click)="rescheduleTarget = null">
+        <div class="dialog-overlay" role="dialog" aria-modal="true" aria-label="Reschedule Booking" (click)="rescheduleTarget = null">
           <div class="dialog card" (click)="$event.stopPropagation()">
             <h3>Reschedule Booking</h3>
             <div class="form-group">
@@ -91,7 +91,7 @@ import { ShimmerLoaderComponent } from '../../shared/components/shimmer-loader/s
 
       <!-- Cancel Confirmation Dialog -->
       @if (cancelTarget) {
-        <div class="dialog-overlay" (click)="cancelTarget = null">
+        <div class="dialog-overlay" role="dialog" aria-modal="true" aria-label="Cancel Booking" (click)="cancelTarget = null">
           <div class="dialog card" (click)="$event.stopPropagation()">
             <h3>Cancel Booking</h3>
             <p>Are you sure you want to cancel this booking?</p>

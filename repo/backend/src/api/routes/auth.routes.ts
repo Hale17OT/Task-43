@@ -6,9 +6,49 @@ import { KnexUserRepository } from '../../infrastructure/database/repositories/u
 import { KnexSessionRepository } from '../../infrastructure/database/repositories/session-repository.js';
 import { logger } from '../../infrastructure/logging/index.js';
 
+// In-memory IP-based rate limiter for login endpoint.
+// Limits each IP to 20 login attempts per minute.
+const LOGIN_WINDOW_MS = 60_000;
+const LOGIN_MAX_PER_IP = 20;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function checkLoginRateLimit(ip: string): { allowed: boolean; retryAfterSeconds: number } {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+
+  if (!entry || now >= entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  entry.count++;
+  if (entry.count > LOGIN_MAX_PER_IP) {
+    return { allowed: false, retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+// Periodic cleanup of expired entries to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of loginAttempts) {
+    if (now >= entry.resetAt) loginAttempts.delete(ip);
+  }
+}, LOGIN_WINDOW_MS);
+
 export default async function authRoutes(app: FastifyInstance) {
   // POST /api/auth/login
   app.post('/api/auth/login', async (request: FastifyRequest, reply: FastifyReply) => {
+    // IP-based rate limiting
+    const rateCheck = checkLoginRateLimit(request.ip);
+    if (!rateCheck.allowed) {
+      return reply.status(429).send({
+        error: 'RATE_LIMITED',
+        message: 'Too many login attempts. Please try again later.',
+        retryAfterSeconds: rateCheck.retryAfterSeconds,
+      });
+    }
+
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(422).send({
@@ -59,15 +99,15 @@ export default async function authRoutes(app: FastifyInstance) {
       });
     } catch (err) {
       if (err instanceof AuthError) {
-        logger.warn({ username: '[REDACTED]', statusCode: err.statusCode }, 'Login failed');
+        logger.warn({ username: '[REDACTED]' }, 'Login failed');
         const response: Record<string, unknown> = {
-          error: err.statusCode === 423 ? 'LOCKED' : 'UNAUTHORIZED',
+          error: 'UNAUTHORIZED',
           message: err.message,
         };
         if ((err as any).retryAfterSeconds) {
           response.retryAfterSeconds = (err as any).retryAfterSeconds;
         }
-        return reply.status(err.statusCode).send(response);
+        return reply.status(401).send(response);
       }
       throw err;
     }
