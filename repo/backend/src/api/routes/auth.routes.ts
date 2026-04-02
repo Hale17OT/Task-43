@@ -7,9 +7,10 @@ import { KnexSessionRepository } from '../../infrastructure/database/repositorie
 import { logger } from '../../infrastructure/logging/index.js';
 
 // In-memory IP-based rate limiter for login endpoint.
-// Limits each IP to 20 login attempts per minute.
+// Configurable via env: LOGIN_RATE_LIMIT (default 60 in dev, 20 in prod).
 const LOGIN_WINDOW_MS = 60_000;
-const LOGIN_MAX_PER_IP = 20;
+const isDev = process.env.NODE_ENV !== 'production';
+const LOGIN_MAX_PER_IP = parseInt(process.env.LOGIN_RATE_LIMIT ?? (isDev ? '200' : '20'), 10);
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function checkLoginRateLimit(ip: string): { allowed: boolean; retryAfterSeconds: number } {

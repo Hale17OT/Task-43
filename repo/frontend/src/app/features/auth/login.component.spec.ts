@@ -88,7 +88,7 @@ describe('LoginComponent', () => {
     authSpy.login.and.returnValue({
       subscribe: (handlers: any) => {
         handlers.error({
-          status: 423,
+          status: 401,
           error: { message: 'Account locked', retryAfterSeconds: 30 },
         });
         return { unsubscribe: () => {} };
@@ -118,7 +118,7 @@ describe('LoginComponent', () => {
     authSpy.login.and.returnValue({
       subscribe: (handlers: any) => {
         handlers.error({
-          status: 423,
+          status: 401,
           error: { message: 'Account locked', retryAfterSeconds: 2 },
         });
         return { unsubscribe: () => {} };
