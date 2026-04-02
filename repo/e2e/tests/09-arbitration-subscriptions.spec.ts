@@ -185,10 +185,10 @@ test.describe('Report Subscription Toggle API', () => {
     const { subscription } = await createRes.json();
     expect(subscription.is_active).toBe(true);
 
-    // Toggle to inactive using snake_case (frontend pattern)
+    // Toggle to inactive using camelCase (API contract)
     const toggleRes = await page.request.patch(`/api/report-subscriptions/${subscription.id}`, {
       headers: { Authorization: `Bearer ${token}` },
-      data: { is_active: false },
+      data: { isActive: false },
     });
     expect(toggleRes.ok()).toBe(true);
     const toggled = await toggleRes.json();

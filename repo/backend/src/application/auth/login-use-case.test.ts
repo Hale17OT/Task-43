@@ -151,7 +151,7 @@ describe('LoginUseCase', () => {
       await useCase.execute({ username: 'testuser', password: 'wrong' });
       expect.fail('Should have thrown');
     } catch (e: any) {
-      expect(e.statusCode).toBe(401); // Not 423
+      expect(e.statusCode).toBe(401); // Not locked — below threshold
       expect(userRepo.update).not.toHaveBeenCalled(); // No lockout set
     }
   });

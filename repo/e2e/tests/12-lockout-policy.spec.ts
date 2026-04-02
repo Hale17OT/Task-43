@@ -73,7 +73,7 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
     }
 
     // After 5th attempt, UI should show lockout message/countdown
-    // Look for the lockout text (423 handler shows countdown)
+    // Look for the lockout text (401 with retryAfterSeconds handler shows countdown)
     await expect(page.locator('text=/locked|try again/i').first()).toBeVisible({ timeout: 5000 });
   });
 });

@@ -81,7 +81,7 @@ describe('LoginComponent', () => {
     expect(component.lockoutSeconds).toBe(0);
   }));
 
-  it('starts lockout countdown on 423', fakeAsync(() => {
+  it('starts lockout countdown on 401 with retryAfterSeconds', fakeAsync(() => {
     component.username = 'lockeduser';
     component.password = 'anypass';
 

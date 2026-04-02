@@ -350,7 +350,7 @@ test('platform walkthrough records one full feature video', async ({ page }) => 
     }
 
     expect((await page.request.get('/api/admin/system-status', { headers: auth(ids.adminToken) })).ok()).toBe(true);
-    expect((await page.request.post('/api/admin/confirm-key-backup', { headers: auth(ids.adminToken) })).ok()).toBe(true);
+    expect((await page.request.post('/api/admin/confirm-key-backup', { headers: auth(ids.superToken) })).ok()).toBe(true);
 
     const audit = await page.request.get('/api/admin/audit-log?page=1&limit=20', {
       headers: auth(ids.superToken),
