@@ -62,8 +62,9 @@ export class KnexUserRepository implements UserRepository {
     return toDomain(row);
   }
 
-  async update(id: string, fields: Partial<Pick<User, 'isActive' | 'isSessionExempt' | 'creditScore' | 'failedLoginAttempts' | 'lockedUntil' | 'role' | 'dailyCapacity'>>): Promise<User | null> {
+  async update(id: string, fields: Partial<Pick<User, 'username' | 'isActive' | 'isSessionExempt' | 'creditScore' | 'failedLoginAttempts' | 'lockedUntil' | 'role' | 'dailyCapacity'>>): Promise<User | null> {
     const dbFields: Record<string, any> = {};
+    if (fields.username !== undefined) dbFields.username = fields.username;
     if (fields.isActive !== undefined) dbFields.is_active = fields.isActive;
     if (fields.isSessionExempt !== undefined) dbFields.is_session_exempt = fields.isSessionExempt;
     if (fields.creditScore !== undefined) dbFields.credit_score = fields.creditScore;

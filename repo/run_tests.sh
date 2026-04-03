@@ -24,8 +24,12 @@ if [[ "$USE_LOCAL" == "1" ]]; then
   echo "[2/4] Backend Integration Tests..."
   if [ -z "$DATABASE_URL" ]; then
     echo "WARNING: DATABASE_URL not set — real-DB tests will be skipped."
+    echo "For release validation, set DATABASE_URL and re-run."
+    (cd backend && npx vitest run src/infrastructure src/api 2>&1) || FAILED=1
+  else
+    echo "DATABASE_URL set — running with REQUIRE_DB_TESTS=1 (mandatory gate)."
+    (cd backend && REQUIRE_DB_TESTS=1 npx vitest run src/infrastructure src/api 2>&1) || FAILED=1
   fi
-  (cd backend && npx vitest run src/infrastructure src/api 2>&1) || FAILED=1
   echo ""
 
   echo "[3/4] Frontend Unit Tests..."

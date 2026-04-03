@@ -101,6 +101,12 @@ export default async function authRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AuthError) {
         logger.warn({ username: '[REDACTED]' }, 'Login failed');
+
+        // Eagerly commit so lockout state is visible to subsequent requests
+        // (same pattern as successful login — prevents race where next request
+        // arrives before onResponse commits the failed_attempts/lockedUntil update).
+        try { await db.commit(); request._dbCommitted = true; } catch { /* already committed */ }
+
         const response: Record<string, unknown> = {
           error: 'UNAUTHORIZED',
           message: err.message,

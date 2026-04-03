@@ -95,8 +95,8 @@ test.describe('Lawyer Booking Lifecycle via API', () => {
     });
     const { user: lawyer } = await meRes.json();
 
-    const day = new Date(Date.now() + 2 * 86400000);
-    day.setHours(11, 0, 0, 0);
+    const day = new Date(Date.now() + 5 * 86400000);
+    day.setHours(15, 0, 0, 0);
 
     const createRes = await page.request.post('/api/bookings', {
       headers: { Authorization: `Bearer ${clientToken}` },

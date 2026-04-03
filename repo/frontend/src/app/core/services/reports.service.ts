@@ -29,7 +29,7 @@ export class ReportsService {
   }
 
   toggleSubscription(id: string, isActive: boolean): Observable<{ subscription: ReportSubscription }> {
-    return this.http.patch<{ subscription: ReportSubscription }>(`/api/report-subscriptions/${id}`, { is_active: isActive });
+    return this.http.patch<{ subscription: ReportSubscription }>(`/api/report-subscriptions/${id}`, { isActive });
   }
 
   deleteSubscription(id: string): Observable<void> {

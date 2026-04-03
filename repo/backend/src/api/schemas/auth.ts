@@ -18,6 +18,7 @@ export const createUserSchema = z.object({
 });
 
 export const updateUserSchema = z.object({
+  username: z.string().min(3).optional(),
   isActive: z.boolean().optional(),
   isSessionExempt: z.boolean().optional(),
   role: z.enum(['client', 'lawyer', 'admin', 'super_admin']).optional(),

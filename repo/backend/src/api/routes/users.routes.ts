@@ -156,6 +156,7 @@ export default async function userRoutes(app: FastifyInstance) {
     }
 
     const updated = await userRepo.update(id, {
+      username: body.username,
       isActive: body.isActive,
       isSessionExempt: body.isSessionExempt,
       role: body.role,

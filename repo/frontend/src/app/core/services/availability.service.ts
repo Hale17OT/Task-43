@@ -17,7 +17,7 @@ export class AvailabilityService {
   }
 
   update(id: string, slot: Record<string, any>): Observable<{ slot: Availability }> {
-    return this.http.put<{ slot: Availability }>(`/api/availability/${id}`, slot);
+    return this.http.patch<{ slot: Availability }>(`/api/availability/${id}`, slot);
   }
 
   delete(id: string): Observable<void> {

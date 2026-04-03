@@ -51,12 +51,16 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
   });
 
   test('UI displays lockout countdown when server returns 401 with retryAfterSeconds', async ({ page }) => {
+    // Use client3 (different from client2 used in the API lockout test above)
+    // so the account isn't already locked from the previous test.
+    const uiTestUser = 'client3';
+
     await page.goto('/login');
     await page.evaluate(() => localStorage.clear());
 
     // First ensure account is accessible
     const checkRes = await page.request.post('/api/auth/login', {
-      data: { username: testUser, password: correctPassword },
+      data: { username: uiTestUser, password: correctPassword },
     });
     const checkBody = await checkRes.json().catch(() => ({}));
     if (checkRes.status() === 401 && checkBody.retryAfterSeconds) {
@@ -66,7 +70,7 @@ test.describe('Account lockout policy: 5 failures → 15-minute lock', () => {
 
     // Trigger lockout via 5 wrong attempts through UI
     for (let i = 0; i < 5; i++) {
-      await page.fill('#username', testUser);
+      await page.fill('#username', uiTestUser);
       await page.fill('#password', wrongPassword);
       await page.click('button[type="submit"]');
       await page.waitForTimeout(500);
