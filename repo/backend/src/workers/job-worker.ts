@@ -141,12 +141,12 @@ export class JobWorker {
     await trx('jobs')
       .where({ id: job.id })
       .update({
-        payload: {
+        payload: JSON.stringify({
           ...job.payload,
           processedCount: newProcessedCount,
           lastBatchSize: records.length,
           lastProcessedAt: new Date().toISOString(),
-        },
+        }),
       });
 
     logger.info({
@@ -236,12 +236,12 @@ export class JobWorker {
     await trx('jobs')
       .where({ id: job.id })
       .update({
-        payload: {
+        payload: JSON.stringify({
           ...job.payload,
           findings,
           findingsCount: findings.length,
           completedAt: new Date().toISOString(),
-        },
+        }),
       });
 
     // Notify admins if there are high-severity findings

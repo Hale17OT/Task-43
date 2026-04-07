@@ -106,7 +106,7 @@ export default async function webhookRoutes(app: FastifyInstance) {
     const [webhook] = await db('webhook_configs').insert({
       org_id: effectiveOrgId,
       url: parsed.data.url,
-      events: parsed.data.events,
+      events: JSON.stringify(parsed.data.events),
       secret: encrypt(parsed.data.secret),
     }).returning('*');
 
@@ -132,7 +132,7 @@ export default async function webhookRoutes(app: FastifyInstance) {
       .where({ id, org_id: effectiveOrgId })
       .update({
         url: body.url,
-        events: body.events ?? undefined,
+        events: body.events ? JSON.stringify(body.events) : undefined,
         is_active: body.isActive,
       })
       .returning('*');

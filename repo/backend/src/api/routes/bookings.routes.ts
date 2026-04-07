@@ -181,7 +181,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
         method: 'POST',
         path: '/api/bookings',
         status_code: 201,
-        response_body: responseBody,
+        response_body: JSON.stringify(responseBody),
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
       });
 
@@ -508,7 +508,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
       method: 'PATCH',
       path: `/api/bookings/${id}/reschedule`,
       status_code: 201,
-      response_body: responseBody,
+      response_body: JSON.stringify(responseBody),
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 

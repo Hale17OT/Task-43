@@ -147,7 +147,7 @@ export class KnexReviewRepository {
       org_id: input.orgId,
       reason: encrypt(input.reason),
       deadline_at: input.deadlineAt,
-      penalty_escrowed: input.penaltyEscrowed ?? null,
+      penalty_escrowed: input.penaltyEscrowed ? JSON.stringify(input.penaltyEscrowed) : null,
     }).returning('*');
     return toDispute(row);
   }

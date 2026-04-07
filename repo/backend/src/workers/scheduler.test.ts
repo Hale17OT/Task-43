@@ -41,13 +41,13 @@ describe('Scheduler report job generation', () => {
 
     expect(enqueuedJobs.length).toBe(2);
 
-    // Verify payload structure (payload is a native object, not JSON string)
-    const job1Payload = enqueuedJobs[0].payload;
+    // Verify payload structure
+    const job1Payload = JSON.parse(enqueuedJobs[0].payload);
     expect(job1Payload.userId).toBe('user-1');
     expect(job1Payload.reportType).toBe('utilization');
     expect(job1Payload.subscriptionId).toBe('sub-1');
 
-    const job2Payload = enqueuedJobs[1].payload;
+    const job2Payload = JSON.parse(enqueuedJobs[1].payload);
     expect(job2Payload.userId).toBe('user-2');
     expect(job2Payload.reportType).toBe('fault_rate');
 

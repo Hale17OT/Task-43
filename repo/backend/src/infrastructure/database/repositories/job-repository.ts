@@ -59,7 +59,7 @@ export class KnexJobRepository {
     const shardKey = input.shardKey ?? computeShardKey(input.type + (input.orgId ?? input.idempotencyKey ?? ''));
     const [row] = await this.db('jobs').insert({
       type: input.type,
-      payload: input.payload ?? {},
+      payload: JSON.stringify(input.payload ?? {}),
       priority: input.priority ?? 0,
       idempotency_key: input.idempotencyKey ?? null,
       next_retry_at: input.scheduledAt ?? null,
