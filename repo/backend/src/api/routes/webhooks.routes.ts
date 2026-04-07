@@ -3,14 +3,42 @@ import { z } from 'zod';
 import { authorize } from '../plugins/authorize.plugin.js';
 import { encrypt } from '../../infrastructure/encryption/index.js';
 
+/**
+ * Webhook URL validation — permits private/LAN addresses for on-prem use.
+ *
+ * Only cloud metadata endpoints (169.254.169.254, metadata.google.internal)
+ * are blocked, as these are SSRF escalation targets and never legitimate
+ * webhook destinations. All other URLs including localhost, 10.x, 172.16-31.x,
+ * and 192.168.x are permitted to support air-gapped/on-prem deployments.
+ *
+ * Requires http or https scheme.
+ */
+function isValidWebhookUrl(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    const hostname = url.hostname.toLowerCase();
+    // Block only cloud metadata endpoints (SSRF escalation vectors)
+    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') return false;
+    // All other hosts allowed — including private/LAN for on-prem
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const webhookUrlSchema = z.string().url().refine(isValidWebhookUrl, {
+  message: 'Webhook URL must use http(s). Cloud metadata endpoints are blocked.',
+});
+
 const createWebhookSchema = z.object({
-  url: z.string().url(),
+  url: webhookUrlSchema,
   events: z.array(z.string()),
   secret: z.string().min(8),
 });
 
 const updateWebhookSchema = z.object({
-  url: z.string().url().optional(),
+  url: webhookUrlSchema.optional(),
   events: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
   targetOrgId: z.string().uuid().optional(),
@@ -78,7 +106,7 @@ export default async function webhookRoutes(app: FastifyInstance) {
     const [webhook] = await db('webhook_configs').insert({
       org_id: effectiveOrgId,
       url: parsed.data.url,
-      events: JSON.stringify(parsed.data.events),
+      events: parsed.data.events,
       secret: encrypt(parsed.data.secret),
     }).returning('*');
 
@@ -104,7 +132,7 @@ export default async function webhookRoutes(app: FastifyInstance) {
       .where({ id, org_id: effectiveOrgId })
       .update({
         url: body.url,
-        events: body.events ? JSON.stringify(body.events) : undefined,
+        events: body.events ?? undefined,
         is_active: body.isActive,
       })
       .returning('*');

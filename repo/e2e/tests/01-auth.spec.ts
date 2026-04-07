@@ -70,24 +70,25 @@ test.describe('Authentication', () => {
     await login(page, 'client1');
     await waitForShell(page);
 
-    // Navigate within SPA to avoid full page reload
-    await page.evaluate(() => window.history.pushState({}, '', '/admin/dashboard'));
-    await page.evaluate(() => window.dispatchEvent(new PopStateEvent('popstate')));
-    // Give Angular time to process the route change
+    // Try navigating to admin route
+    await page.goto(page.url().replace(/\/[^/]*$/, '/admin/dashboard'));
     await page.waitForTimeout(2000);
-    // Should redirect to client dashboard (role guard) or show denied banner
+    // Client must be redirected away from admin — either to own dashboard or denied banner shown
     const url = page.url();
-    expect(url).toMatch(/\/client\/dashboard|\/admin\/dashboard/);
+    expect(url).not.toMatch(/\/admin\//);
+    // Verify we landed on client dashboard (guard redirect)
+    expect(url).toContain('/client/dashboard');
   });
 
   test('lawyer cannot access client routes', async ({ page }) => {
     await login(page, 'lawyer1');
     await waitForShell(page);
 
-    await page.evaluate(() => window.history.pushState({}, '', '/client/dashboard'));
-    await page.evaluate(() => window.dispatchEvent(new PopStateEvent('popstate')));
+    await page.goto(page.url().replace(/\/[^/]*$/, '/client/dashboard'));
     await page.waitForTimeout(2000);
     const url = page.url();
-    expect(url).toMatch(/\/lawyer\/dashboard|\/client\/dashboard/);
+    // Lawyer must be redirected away from client routes
+    expect(url).not.toContain('/client/');
+    expect(url).toContain('/lawyer/dashboard');
   });
 });

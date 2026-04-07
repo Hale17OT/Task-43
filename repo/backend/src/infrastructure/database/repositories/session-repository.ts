@@ -1,14 +1,25 @@
 import { Knex } from 'knex';
+import { createHash } from 'crypto';
 import { Session, SessionRepository } from '../../../domain/ports/session-repository.js';
+import { encrypt, decrypt } from '../../encryption/index.js';
+
+function hashNonce(nonce: string): string {
+  return createHash('sha256').update(nonce).digest('hex');
+}
+
+function decryptField(value: string | null): string | null {
+  if (!value) return null;
+  try { return decrypt(value); } catch { return value; /* legacy unencrypted */ }
+}
 
 function toDomain(row: any): Session {
   return {
     id: row.id,
     userId: row.user_id,
-    sessionNonce: row.session_nonce,
-    tokenJti: row.token_jti,
-    ipAddress: row.ip_address,
-    workstationId: row.workstation_id,
+    sessionNonce: decryptField(row.session_nonce) ?? row.session_nonce,
+    tokenJti: decryptField(row.token_jti) ?? row.token_jti,
+    ipAddress: decryptField(row.ip_address),
+    workstationId: decryptField(row.workstation_id),
     expiresAt: new Date(row.expires_at),
     createdAt: new Date(row.created_at),
   };
@@ -18,8 +29,14 @@ export class KnexSessionRepository implements SessionRepository {
   constructor(private db: Knex) {}
 
   async findByUserIdAndNonce(userId: string, nonce: string): Promise<Session | null> {
+    // Use deterministic hash for lookup (nonce is encrypted at rest)
+    const nonceHash = hashNonce(nonce);
     const row = await this.db('user_sessions')
-      .where({ user_id: userId, session_nonce: nonce })
+      .where({ user_id: userId })
+      .where(function () {
+        // Support both new (hash-based) and legacy (plaintext nonce) lookups
+        this.where({ session_nonce_hash: nonceHash }).orWhere({ session_nonce: nonce });
+      })
       .where('expires_at', '>', new Date())
       .first();
     return row ? toDomain(row) : null;
@@ -35,10 +52,11 @@ export class KnexSessionRepository implements SessionRepository {
   async create(input: Omit<Session, 'id' | 'createdAt'>): Promise<Session> {
     const [row] = await this.db('user_sessions').insert({
       user_id: input.userId,
-      session_nonce: input.sessionNonce,
-      token_jti: input.tokenJti,
-      ip_address: input.ipAddress,
-      workstation_id: input.workstationId,
+      session_nonce: encrypt(input.sessionNonce),
+      session_nonce_hash: hashNonce(input.sessionNonce),
+      token_jti: encrypt(input.tokenJti),
+      ip_address: input.ipAddress ? encrypt(input.ipAddress) : null,
+      workstation_id: input.workstationId ? encrypt(input.workstationId) : null,
       expires_at: input.expiresAt,
     }).returning('*');
     return toDomain(row);

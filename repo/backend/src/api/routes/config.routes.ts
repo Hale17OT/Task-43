@@ -66,7 +66,7 @@ export default async function configRoutes(app: FastifyInstance) {
       org_id: targetOrgId,
       category: parsed.data.category,
       key: parsed.data.key,
-      value: JSON.stringify(parsed.data.value),
+      value: parsed.data.value,
     }).returning('*');
 
     return reply.status(201).send({ entry });
@@ -87,12 +87,11 @@ export default async function configRoutes(app: FastifyInstance) {
 
     let q = db('config_dictionaries').where({ id });
     if (role !== 'super_admin') {
-      q = q.where(function () {
-        this.whereNull('org_id').orWhere({ org_id: orgId });
-      });
+      // Org-scoped admins can only update their own org's entries, not globals
+      q = q.where({ org_id: orgId });
     }
 
-    const [entry] = await q.update({ value: JSON.stringify(parsed.data.value) }).returning('*');
+    const [entry] = await q.update({ value: parsed.data.value }).returning('*');
     if (!entry) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Dictionary entry not found' });
     }
@@ -158,7 +157,7 @@ export default async function configRoutes(app: FastifyInstance) {
       workflow_type: parsed.data.workflowType,
       step_order: parsed.data.stepOrder,
       name: parsed.data.name,
-      config: JSON.stringify(parsed.data.config ?? {}),
+      config: parsed.data.config ?? {},
     }).returning('*');
 
     return reply.status(201).send({ step });
@@ -180,7 +179,7 @@ export default async function configRoutes(app: FastifyInstance) {
     const updates: Record<string, any> = {};
     if (parsed.data.stepOrder !== undefined) updates.step_order = parsed.data.stepOrder;
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
-    if (parsed.data.config !== undefined) updates.config = JSON.stringify(parsed.data.config);
+    if (parsed.data.config !== undefined) updates.config = parsed.data.config;
 
     let q = db('workflow_steps').where({ id });
     if (role !== 'super_admin') {

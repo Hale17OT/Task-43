@@ -60,9 +60,12 @@ export class AuthService {
         this.sessionReady$.next(true);
       },
       error: (err) => {
-        // Don't clear session on network abort (status 0) — this happens during
-        // page navigation and would wipe localStorage for the new page load.
         if (err?.status === 0) {
+          // Network abort (navigation or offline) — enter degraded mode.
+          // Clear trusted state so guards won't grant role-based access
+          // from potentially stale/tampered localStorage.
+          this.currentUser.set(null);
+          this.menuPermissions.set([]);
           this.sessionReady$.next(true);
           return;
         }

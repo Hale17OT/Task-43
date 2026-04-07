@@ -1,7 +1,16 @@
 import { Knex } from 'knex';
 import bcrypt from 'bcrypt';
+import { createHash } from 'crypto';
+import { encrypt } from '../../encryption/index.js';
 
 const SALT_ROUNDS = 12;
+
+function userFields(username: string) {
+  return {
+    username: encrypt(username),
+    username_hash: createHash('sha256').update(username).digest('hex'),
+  };
+}
 
 export async function seed(knex: Knex): Promise<void> {
   // Bypass RLS for seeding
@@ -42,7 +51,7 @@ export async function seed(knex: Knex): Promise<void> {
   // Users
   const [superAdmin] = await knex('users').insert({
     org_id: org1.id,
-    username: 'superadmin',
+    ...userFields('superadmin'),
     password_hash: passwordHash,
     role: 'super_admin',
     is_session_exempt: true,
@@ -51,7 +60,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   const [admin1] = await knex('users').insert({
     org_id: org1.id,
-    username: 'admin1',
+    ...userFields('admin1'),
     password_hash: passwordHash,
     role: 'admin',
     credit_score: 100,
@@ -59,7 +68,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   const [lawyer1] = await knex('users').insert({
     org_id: org1.id,
-    username: 'lawyer1',
+    ...userFields('lawyer1'),
     password_hash: passwordHash,
     role: 'lawyer',
     daily_capacity: 10,
@@ -68,7 +77,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   const [lawyer2] = await knex('users').insert({
     org_id: org1.id,
-    username: 'lawyer2',
+    ...userFields('lawyer2'),
     password_hash: passwordHash,
     role: 'lawyer',
     daily_capacity: 8,
@@ -77,7 +86,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   const [client1] = await knex('users').insert({
     org_id: org1.id,
-    username: 'client1',
+    ...userFields('client1'),
     password_hash: passwordHash,
     role: 'client',
     credit_score: 50,
@@ -85,7 +94,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   const [client2] = await knex('users').insert({
     org_id: org1.id,
-    username: 'client2',
+    ...userFields('client2'),
     password_hash: passwordHash,
     role: 'client',
     credit_score: 45,
@@ -94,7 +103,7 @@ export async function seed(knex: Knex): Promise<void> {
   // Org 2 users
   await knex('users').insert({
     org_id: org2.id,
-    username: 'admin2',
+    ...userFields('admin2'),
     password_hash: passwordHash,
     role: 'admin',
     credit_score: 100,
@@ -102,7 +111,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   await knex('users').insert({
     org_id: org2.id,
-    username: 'lawyer3',
+    ...userFields('lawyer3'),
     password_hash: passwordHash,
     role: 'lawyer',
     daily_capacity: 12,
@@ -111,7 +120,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   await knex('users').insert({
     org_id: org2.id,
-    username: 'client3',
+    ...userFields('client3'),
     password_hash: passwordHash,
     role: 'client',
     credit_score: 60,

@@ -70,7 +70,15 @@ function createQueryChain(rows: any[]) {
       return chain;
     },
     orWhere(arg: any) {
-      // Simplified mock — does not union results
+      // Union: add rows from original set that match the orWhere condition
+      if (typeof arg === 'object') {
+        const additional = rows.filter(r =>
+          Object.entries(arg).every(([k, v]) => r[k] === v)
+        );
+        for (const row of additional) {
+          if (!filtered.includes(row)) filtered.push(row);
+        }
+      }
       return chain;
     },
     whereNot(arg: any) {

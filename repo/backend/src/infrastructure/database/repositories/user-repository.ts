@@ -1,12 +1,22 @@
 import { Knex } from 'knex';
+import { createHash } from 'crypto';
 import { User, CreateUserInput } from '../../../domain/entities/user.js';
 import { UserRepository } from '../../../domain/ports/user-repository.js';
+import { encrypt, decrypt } from '../../encryption/index.js';
+
+function hashUsername(username: string): string {
+  return createHash('sha256').update(username).digest('hex');
+}
+
+function decryptSafe(value: string): string {
+  try { return decrypt(value); } catch { return value; /* legacy plaintext */ }
+}
 
 function toDomain(row: any): User {
   return {
     id: row.id,
     orgId: row.org_id,
-    username: row.username,
+    username: decryptSafe(row.username),
     passwordHash: row.password_hash,
     role: row.role,
     creditScore: row.credit_score,
@@ -29,7 +39,12 @@ export class KnexUserRepository implements UserRepository {
   }
 
   async findByUsername(username: string): Promise<User | null> {
-    const row = await this.db('users').where({ username }).first();
+    const usernameHash = hashUsername(username);
+    // Support both hash-based (encrypted) and legacy (plaintext) lookups
+    const row = await this.db('users')
+      .where({ username_hash: usernameHash })
+      .orWhere({ username })
+      .first();
     return row ? toDomain(row) : null;
   }
 
@@ -53,7 +68,8 @@ export class KnexUserRepository implements UserRepository {
   async create(input: CreateUserInput): Promise<User> {
     const [row] = await this.db('users').insert({
       org_id: input.orgId,
-      username: input.username,
+      username: encrypt(input.username),
+      username_hash: hashUsername(input.username),
       password_hash: input.passwordHash,
       role: input.role,
       daily_capacity: input.dailyCapacity ?? null,
@@ -64,7 +80,10 @@ export class KnexUserRepository implements UserRepository {
 
   async update(id: string, fields: Partial<Pick<User, 'username' | 'isActive' | 'isSessionExempt' | 'creditScore' | 'failedLoginAttempts' | 'lockedUntil' | 'role' | 'dailyCapacity'>>): Promise<User | null> {
     const dbFields: Record<string, any> = {};
-    if (fields.username !== undefined) dbFields.username = fields.username;
+    if (fields.username !== undefined) {
+      dbFields.username = encrypt(fields.username);
+      dbFields.username_hash = hashUsername(fields.username);
+    }
     if (fields.isActive !== undefined) dbFields.is_active = fields.isActive;
     if (fields.isSessionExempt !== undefined) dbFields.is_session_exempt = fields.isSessionExempt;
     if (fields.creditScore !== undefined) dbFields.credit_score = fields.creditScore;

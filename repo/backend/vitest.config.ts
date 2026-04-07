@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: {
+      ENCRYPTION_KEY: 'dev-encryption-key-change-in-prd',
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

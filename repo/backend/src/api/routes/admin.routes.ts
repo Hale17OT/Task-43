@@ -23,11 +23,11 @@ export default async function adminRoutes(app: FastifyInstance) {
 
 
     await db('system_config').where({ key: 'encryption_key_backup_confirmed' }).update({
-      value: JSON.stringify({
+      value: {
         confirmed: true,
         confirmed_by: request.user.userId,
         confirmed_at: new Date().toISOString(),
-      }),
+      },
       updated_at: new Date(),
     });
 

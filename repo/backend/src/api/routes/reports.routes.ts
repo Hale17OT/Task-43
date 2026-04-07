@@ -170,7 +170,7 @@ export default async function reportRoutes(app: FastifyInstance) {
     const [sub] = await db('report_subscriptions').insert({
       user_id: request.user.userId,
       report_type: parsed.data.reportType,
-      filters: JSON.stringify(parsed.data.filters ?? {}),
+      filters: parsed.data.filters ?? {},
     }).returning('*');
 
     return reply.status(201).send({ subscription: sub });
@@ -192,7 +192,7 @@ export default async function reportRoutes(app: FastifyInstance) {
       .where({ id, user_id: request.user.userId })
       .update({
         is_active: body.isActive,
-        filters: body.filters ? JSON.stringify(body.filters) : undefined,
+        filters: body.filters ?? undefined,
       })
       .returning('*');
 

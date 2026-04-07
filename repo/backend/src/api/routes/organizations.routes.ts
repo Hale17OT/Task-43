@@ -48,7 +48,7 @@ export default async function organizationRoutes(app: FastifyInstance) {
 
     const [org] = await db('organizations').insert({
       name: parsed.data.name,
-      settings: JSON.stringify(parsed.data.settings ?? {}),
+      settings: parsed.data.settings ?? {},
     }).returning('*');
 
     return reply.status(201).send({ organization: org });
@@ -69,7 +69,7 @@ export default async function organizationRoutes(app: FastifyInstance) {
 
     const [org] = await db('organizations').where({ id }).update({
       name: body.name,
-      settings: body.settings ? JSON.stringify(body.settings) : undefined,
+      settings: body.settings ?? undefined,
       updated_at: new Date(),
     }).returning('*');
 

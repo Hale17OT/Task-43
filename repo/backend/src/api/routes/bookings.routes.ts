@@ -33,6 +33,12 @@ export default async function bookingRoutes(app: FastifyInstance) {
     if (query.type) filters.type = query.type;
     if (query.from) filters.from = new Date(query.from);
     if (query.to) filters.to = new Date(query.to);
+    // Single-day filter (used by lawyer dashboard for "today's bookings")
+    if (query.date) {
+      const day = new Date(query.date);
+      filters.from = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+      filters.to = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+    }
 
     // Scope by role
     if (role === 'client') filters.clientId = userId;
@@ -175,7 +181,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
         method: 'POST',
         path: '/api/bookings',
         status_code: 201,
-        response_body: JSON.stringify(responseBody),
+        response_body: responseBody,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
       });
 
@@ -502,7 +508,7 @@ export default async function bookingRoutes(app: FastifyInstance) {
       method: 'PATCH',
       path: `/api/bookings/${id}/reschedule`,
       status_code: 201,
-      response_body: JSON.stringify(responseBody),
+      response_body: responseBody,
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 

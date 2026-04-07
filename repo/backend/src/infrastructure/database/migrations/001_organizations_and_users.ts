@@ -35,7 +35,7 @@ export async function up(knex: Knex): Promise<void> {
 
   await knex('system_config').insert({
     key: 'encryption_key_backup_confirmed',
-    value: JSON.stringify({ confirmed: false, confirmed_by: null, confirmed_at: null }),
+    value: { confirmed: false, confirmed_by: null, confirmed_at: null },
   });
 }
 

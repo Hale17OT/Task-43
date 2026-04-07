@@ -1,10 +1,9 @@
 import { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
-  // 1. Fix username uniqueness: global unique → composite (org_id, username)
-  //    This allows the same username in different organizations.
-  await knex.raw('ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "users_username_unique"');
-  await knex.raw('ALTER TABLE "users" ADD CONSTRAINT "users_org_username_unique" UNIQUE ("org_id", "username")');
+  // 1. Username uniqueness remains GLOBAL — login has no org context,
+  //    so per-org uniqueness would create ambiguous identity.
+  //    No change to username constraint needed.
 
   // 2. Add RLS to config_dictionaries (org-scoped)
   await knex.raw('ALTER TABLE "config_dictionaries" ENABLE ROW LEVEL SECURITY');
@@ -90,7 +89,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.raw('DROP POLICY IF EXISTS "config_dictionaries_isolation" ON "config_dictionaries"');
   await knex.raw('ALTER TABLE "config_dictionaries" DISABLE ROW LEVEL SECURITY');
 
-  // Revert username uniqueness
-  await knex.raw('ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "users_org_username_unique"');
-  await knex.raw('ALTER TABLE "users" ADD CONSTRAINT "users_username_unique" UNIQUE ("username")');
+  // No username constraint change to revert — global uniqueness is preserved.
 }
