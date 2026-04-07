@@ -1,63 +1,99 @@
-# JusticeOps System Design: Technical Ambiguities & Logic Resolution
+These resolutions for JusticeOps are solid—handling distributed state in an air-gapped environment without a message broker like Redis is a classic "engineering on hard mode" scenario. Using PostgreSQL as the "brain" for both job sharding and session management is definitely the right play for stability.
 
----
+Here is the refactored list for your technical documentation:
 
-### 1. Offline Time Synchronization
-* **What sounded ambiguous:** The system enforces strict "10-minute no-show" and "2-hour cancellation" rules. In an air-gapped environment, client workstation clocks often drift from the server.
-* **How it was understood:** Relying on the browser's local time for business logic would lead to disputed penalties and "impossible" timestamps.
-* **How it was solved:** The Angular frontend will sync with the Fastify server time on handshake. All business-critical time calculations (lockouts, penalties, and job scheduling) are performed strictly via PostgreSQL `CURRENT_TIMESTAMP` to ensure a single source of truth across the LAN.
+(1) Offline Time Synchronization
 
-### 2. Job Sharding Without a Message Broker
-* **What sounded ambiguous:** The prompt requires a "distributed job scheduling subsystem" but specifies only PostgreSQL for persistence, excluding tools like Redis or RabbitMQ.
-* **How it was understood:** We must avoid adding infrastructure complexity (Redis) in air-gapped sites where maintenance is difficult.
-* **How it was solved:** Implement a "Transactional Outbox" pattern in PostgreSQL. Fastify nodes will use `SELECT ... FOR UPDATE SKIP LOCKED` to claim jobs from a `job_queue` table. This prevents multiple nodes from processing the same report or record import simultaneously.
+Question: How can we ensure strict time-based rules (no-show/cancellation) remain accurate when client workstation clocks drift in an air-gapped LAN?
 
-### 3. Session Revocation in a Distributed Setup
-* **What sounded ambiguous:** "One active session per user" must be enforced across a distributed node environment without a shared memory cache.
-* **How it was understood:** If a user logs in at Workstation A, and then logs in at Workstation B, Node 2 must be able to invalidate Node 1’s JWT immediately.
-* **How it was solved:** Store a `session_nonce` or `jti` in a `user_sessions` table. Fastify middleware will check this table on every request. When a new login occurs, the old session record is deleted/flagged, effectively "killing" the old JWT across all nodes.
+My Understanding: Relying on local browser time for business logic leads to disputed penalties and inconsistent audit timestamps.
 
-### 4. Encryption Key Persistence
-* **What sounded ambiguous:** "AES-256 with a locally managed key" for sensitive fields. If the server hardware fails, the data is unrecoverable without a cloud KMS.
-* **How it was understood:** Security must be balanced with disaster recovery in isolated environments.
-* **How it was solved:** The `MASTER_KEY` is provided via an environment variable at startup. On the first system deployment, the Admin is forced to generate a "Paper Backup" of the key. The Fastify backend will use a `pre-save` hook to encrypt data before it hits the Postgres persistence layer.
+Solution: Sync the Angular frontend with the Fastify server time during the initial handshake; all critical calculations and penalties are performed strictly via PostgreSQL CURRENT_TIMESTAMP to maintain a single source of truth.
 
-### 5. Credit Score Floor Consequences
-* **What sounded ambiguous:** The system tracks credit scores (0–100), but the "hard" consequence of reaching 0 is undefined.
-* **How it was understood:** A legal services system cannot simply delete a user, but it must prevent them from exhausting system resources if they are unreliable.
-* **How it was solved:** If a Client’s score drops below a configurable "Throttling Threshold" (e.g., 20), the Angular UI disables the "Book New Consultation" button. The API will return a `403` with an "Account Under Review" status until an Admin manually intervenes.
+(2) Job Sharding Without a Message Broker
 
-### 6. The 8:00 AM Notification Spike
-* **What sounded ambiguous:** Scheduled report subscriptions generate notifications at exactly 8:00 AM daily. 
-* **How it was understood:** In an organization with thousands of users, firing all report generations and notifications at 08:00:00 would cause a massive CPU/IO spike on the database.
-* **How it was solved:** The job scheduler will use a "Jittered Start." While the logic is triggered at 8:00 AM, the actual execution for each user is staggered randomly across a 15-minute window (08:00–08:15) to level the load.
+Question: How do we implement a distributed job scheduler without external infrastructure like Redis or RabbitMQ?
 
-### 7. Multi-Tenant Administrative Boundary
-* **What sounded ambiguous:** Admins can be "scoped to a single organization or granted multi-tenant oversight."
-* **How it was understood:** Data isolation must be enforced at the database level to prevent accidental cross-contamination of sensitive legal matters.
-* **How it was solved:** Implement **Row-Level Security (RLS)** in PostgreSQL. Every table includes an `org_id`. The Fastify API sets a local session variable in the DB transaction based on the JWT's claims, ensuring the database itself prevents a scoped admin from seeing other organizations' rows.
+My Understanding: Adding infrastructure complexity is risky in isolated sites; we need a way for multiple nodes to share a queue safely.
 
-### 8. Audit Trail vs. Data Masking
-* **What sounded ambiguous:** "Logs mask personal data... while retaining an immutable audit trail."
-* **How it was understood:** Standard application logs (stdout) must be safe for developers to read, but auditors need the raw data for compliance.
-* **How it was solved:** Two separate streams. The Fastify logger (Pino) is configured to redact fields like `phone` and `client_name`. Conversely, a PostgreSQL `audit_log` table captures the full row-level `OLD` and `NEW` JSONB states, accessible only via the "Super Admin" role.
+Solution: Implement a Transactional Outbox pattern using SELECT ... FOR UPDATE SKIP LOCKED in PostgreSQL. This allows Fastify nodes to claim unique jobs from a job_queue table without processing the same record twice.
 
-### 9. Arbitration State Transitions
-* **What sounded ambiguous:** Disputes can be appealed and routed into arbitration, but the impact on the credit score during the dispute is unclear.
-* **How it was understood:** If a lawyer is penalized for a "no-show" that they are currently disputing, the penalty shouldn't be permanent until the arbitration is closed.
-* **How it was solved:** When a dispute is filed, the credit score penalty is moved to a "Pending/Escrow" state. It does not affect the user's active score until an Admin selects "Upheld" or "Overturned" in the arbitration workspace.
+(3) Session Revocation in a Distributed Setup
 
-### 10. Rate Limiting Persistence
-* **What sounded ambiguous:** Token-bucket rate limiting (20/min/user).
-* **How it was understood:** If the rate limit is only stored in the Fastify node's memory, a user could bypass limits by hitting different nodes or by the service restarting.
-* **How it was solved:** Rate limit "buckets" are persisted in a small PostgreSQL table `rate_limit_buckets`. This ensures that in a multi-node, air-gapped setup, the "200 per minute per organization" limit is strictly synchronized.
+Question: How do we enforce a "one active session per user" policy across multiple nodes without a shared memory cache?
 
-### 11. Idempotency Key Cleanup
-* **What sounded ambiguous:** "Client-generated request keys valid for 24 hours."
-* **How it was understood:** These keys prevent double-bookings during lag, but if the table grows indefinitely, query performance will degrade.
-* **How it was solved:** The sharded job scheduler will run a daily "vacuum" task at 2:00 AM to delete all idempotency keys older than 24 hours from the `idempotency_registry` table.
+My Understanding: A login on a new workstation must immediately invalidate any existing JWTs held by the user on other nodes.
 
-### 12. "Milestone" vs. "Consultation" Logic
-* **What sounded ambiguous:** Clients can book "consultations" or "case milestones."
-* **How it was understood:** Consultations are specific time slots (e.g., 2:00 PM), whereas milestones are often deadlines that don't occupy a specific hour but affect a lawyer's workload.
-* **How it was solved:** The scheduling engine treats "Consultations" as hard-blocked time and "Milestones" as weight-based capacity. A lawyer can have 5 "Milestones" due in a day, which reduces their total available "Consultation" hours proportionately via a `workload_capacity` algorithm.
+Solution: Store a session_nonce or jti in a central user_sessions table. Fastify middleware validates this on every request, and any new login deletes or flags the old record, effectively "killing" the session across the entire network.
+
+(4) Encryption Key Persistence
+
+Question: How can we manage AES-256 keys for sensitive data in an air-gapped environment to prevent total data loss during hardware failure?
+
+My Understanding: Security must be balanced with disaster recovery since there is no cloud-based Key Management Service (KMS).
+
+Solution: Provide the MASTER_KEY via environment variables and mandate a "Paper Backup" generation by the Admin during initial deployment; use pre-save hooks to ensure data is encrypted before reaching the persistence layer.
+
+(5) Credit Score Floor Consequences
+
+Question: What are the definitive system consequences when a user's credit score drops to the minimum value (0)?
+
+My Understanding: The system should not delete users, but it must prevent unreliable users from exhausting system resources.
+
+Solution: Implement a Throttling Threshold (e.g., 20 points). Once reached, the Angular UI disables booking buttons, and the API returns a 403 Account Under Review status, requiring manual Admin intervention to restore functionality.
+
+(6) The 8:00 AM Notification Spike
+
+Question: How do we prevent a massive CPU/IO spike when thousands of scheduled reports trigger simultaneously at 8:00 AM?
+
+My Understanding: Fixed-time execution for large user bases leads to database bottlenecks and potential crashes.
+
+Solution: Introduce a Jittered Start logic. While the scheduler triggers at 8:00 AM, the actual execution for individual users is staggered randomly across a 15-minute window (08:00–08:15) to distribute the database load.
+
+(7) Multi-Tenant Administrative Boundary
+
+Question: How can we enforce strict data isolation between organizations for admins with varying levels of oversight?
+
+My Understanding: We need a database-level guarantee that sensitive legal data does not leak across organizational boundaries.
+
+Solution: Implement Row-Level Security (RLS) in PostgreSQL using an org_id column. The Fastify API sets a session variable in the DB transaction based on JWT claims, ensuring the database itself blocks unauthorized row access.
+
+(8) Audit Trail vs. Data Masking
+
+Question: How do we provide safe, redacted logs for developers while maintaining full, unmasked audit trails for compliance?
+
+My Understanding: Standard application logs must be PII-free, but auditors require the raw state of data changes for legal integrity.
+
+Solution: Utilize two separate streams: redact PII in application logs using Pino, and capture raw OLD and NEW JSONB states in a PostgreSQL audit_log table accessible only to users with the "Super Admin" role.
+
+(9) Arbitration State Transitions
+
+Question: Does a pending dispute or appeal affect a user's active credit score immediately?
+
+My Understanding: Penalties should not be finalized while they are actively being contested in an arbitration process.
+
+Solution: Move disputed penalties to a "Pending/Escrow" state. These penalties do not impact the user's active score or booking ability until an Admin manually selects "Upheld" or "Overturned" in the arbitration workspace.
+
+(10) Rate Limiting Persistence
+
+Question: How can we enforce rate limits consistently across multiple nodes and through service restarts?
+
+My Understanding: Memory-based limiting allows users to bypass thresholds by switching nodes or waiting for a service reboot.
+
+Solution: Persist rate limit "buckets" in a PostgreSQL rate_limit_buckets table. This ensures synchronized enforcement of the "20 per minute" limit across all nodes in the air-gapped setup.
+
+(11) Idempotency Key Cleanup
+
+Question: How do we manage the growth of the idempotency registry table to prevent performance degradation over time?
+
+My Understanding: These keys are only necessary for a short 24-hour window to prevent double-bookings during network lag.
+
+Solution: Use the internal job scheduler to run a daily "vacuum" task (e.g., 2:00 AM) that purges all idempotency records older than the 24-hour validity window from the registry table.
+
+(12) "Milestone" vs. "Consultation" Logic
+
+Question: How does the scheduling engine distinguish between specific time-slot consultations and general case milestones?
+
+My Understanding: Consultations are hard-blocked hours, whereas milestones represent a broader daily workload that impacts capacity.
+
+Solution: Treat Consultations as Hard-Blocked Time and use a Weight-Based Capacity algorithm for Milestones. As milestones accumulate for a specific day, the system proportionately reduces the available consultation hours for that lawyer.
