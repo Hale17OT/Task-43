@@ -9,7 +9,7 @@ function hashNonce(nonce: string): string {
 
 function decryptField(value: string | null): string | null {
   if (!value) return null;
-  try { return decrypt(value); } catch { return value; /* legacy unencrypted */ }
+  return decrypt(value);
 }
 
 function toDomain(row: any): Session {
@@ -32,11 +32,7 @@ export class KnexSessionRepository implements SessionRepository {
     // Use deterministic hash for lookup (nonce is encrypted at rest)
     const nonceHash = hashNonce(nonce);
     const row = await this.db('user_sessions')
-      .where({ user_id: userId })
-      .where(function () {
-        // Support both new (hash-based) and legacy (plaintext nonce) lookups
-        this.where({ session_nonce_hash: nonceHash }).orWhere({ session_nonce: nonce });
-      })
+      .where({ user_id: userId, session_nonce_hash: nonceHash })
       .where('expires_at', '>', new Date())
       .first();
     return row ? toDomain(row) : null;

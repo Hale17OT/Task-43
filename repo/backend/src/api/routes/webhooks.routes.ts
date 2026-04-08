@@ -2,34 +2,12 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { authorize } from '../plugins/authorize.plugin.js';
 import { encrypt } from '../../infrastructure/encryption/index.js';
+import { assertWebhookUrlSafe } from '../../infrastructure/webhooks/url-validator.js';
 
-/**
- * Webhook URL validation — permits private/LAN addresses for on-prem use.
- *
- * Only cloud metadata endpoints (169.254.169.254, metadata.google.internal)
- * are blocked, as these are SSRF escalation targets and never legitimate
- * webhook destinations. All other URLs including localhost, 10.x, 172.16-31.x,
- * and 192.168.x are permitted to support air-gapped/on-prem deployments.
- *
- * Requires http or https scheme.
- */
-function isValidWebhookUrl(urlStr: string): boolean {
-  try {
-    const url = new URL(urlStr);
-    if (!['http:', 'https:'].includes(url.protocol)) return false;
-    const hostname = url.hostname.toLowerCase();
-    // Block only cloud metadata endpoints (SSRF escalation vectors)
-    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') return false;
-    // All other hosts allowed — including private/LAN for on-prem
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const webhookUrlSchema = z.string().url().refine(isValidWebhookUrl, {
-  message: 'Webhook URL must use http(s). Cloud metadata endpoints are blocked.',
-});
+const webhookUrlSchema = z.string().url().refine(
+  async (url) => { try { await assertWebhookUrlSafe(url); return true; } catch { return false; } },
+  { message: 'Webhook URL must use http(s). Cloud metadata endpoints and link-local range (169.254.0.0/16) are blocked.' },
+);
 
 const createWebhookSchema = z.object({
   url: webhookUrlSchema,
@@ -94,7 +72,7 @@ export default async function webhookRoutes(app: FastifyInstance) {
   app.post('/api/webhooks', {
     preHandler: [app.authenticate, authorize('admin', 'super_admin')],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = createWebhookSchema.safeParse(request.body);
+    const parsed = await createWebhookSchema.safeParseAsync(request.body);
     if (!parsed.success) {
       return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
     }
@@ -118,7 +96,7 @@ export default async function webhookRoutes(app: FastifyInstance) {
     preHandler: [app.authenticate, authorize('admin', 'super_admin')],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
-    const parsed = updateWebhookSchema.safeParse(request.body);
+    const parsed = await updateWebhookSchema.safeParseAsync(request.body);
     if (!parsed.success) {
       return reply.status(422).send({ error: 'VALIDATION_ERROR', message: 'Invalid input', details: parsed.error.issues });
     }

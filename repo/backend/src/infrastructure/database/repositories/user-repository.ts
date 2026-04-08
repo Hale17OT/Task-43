@@ -8,15 +8,15 @@ function hashUsername(username: string): string {
   return createHash('sha256').update(username).digest('hex');
 }
 
-function decryptSafe(value: string): string {
-  try { return decrypt(value); } catch { return value; /* legacy plaintext */ }
+function decryptUsername(value: string): string {
+  return decrypt(value);
 }
 
 function toDomain(row: any): User {
   return {
     id: row.id,
     orgId: row.org_id,
-    username: decryptSafe(row.username),
+    username: decryptUsername(row.username),
     passwordHash: row.password_hash,
     role: row.role,
     creditScore: row.credit_score,
@@ -40,10 +40,8 @@ export class KnexUserRepository implements UserRepository {
 
   async findByUsername(username: string): Promise<User | null> {
     const usernameHash = hashUsername(username);
-    // Support both hash-based (encrypted) and legacy (plaintext) lookups
     const row = await this.db('users')
       .where({ username_hash: usernameHash })
-      .orWhere({ username })
       .first();
     return row ? toDomain(row) : null;
   }

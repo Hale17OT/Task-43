@@ -2,6 +2,7 @@ import { Knex } from 'knex';
 import { createHmac } from 'crypto';
 import { decrypt } from '../encryption/index.js';
 import { logger } from '../logging/index.js';
+import { assertWebhookUrlSafe } from './url-validator.js';
 
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_BASE_MS = 1000;
@@ -36,6 +37,9 @@ async function deliverWithRetry(url: string, body: string, signature: string): P
     }
 
     try {
+      // Re-validate URL at delivery time to prevent DNS rebinding (TOCTOU)
+      await assertWebhookUrlSafe(url);
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
 

@@ -21,6 +21,8 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import jwt from '@fastify/jwt';
 import { Knex } from 'knex';
+import { encrypt } from '../infrastructure/encryption/index.js';
+import { createHash } from 'crypto';
 
 const JWT_SECRET = 'test-jwt-secret-at-least-32-characters!!';
 
@@ -164,6 +166,17 @@ export async function buildTestApp(options: {
 }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const mockData = options.mockData ?? {};
+
+  // Encrypt sensitive fields in mock user rows so repositories can decrypt them
+  if (mockData['users']) {
+    for (const user of mockData['users']) {
+      if (user.username && !user.username.includes(':')) {
+        // Plaintext username — encrypt and add hash for lookup
+        user.username_hash = createHash('sha256').update(user.username).digest('hex');
+        user.username = encrypt(user.username);
+      }
+    }
+  }
 
   // Ensure session table exists in mock data
   if (!mockData['user_sessions']) mockData['user_sessions'] = [];

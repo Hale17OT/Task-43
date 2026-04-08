@@ -73,11 +73,14 @@ test.describe('Authentication', () => {
     // Use SPA navigation to test guard without full page reload
     await page.evaluate(() => window.history.pushState({}, '', '/admin/dashboard'));
     await page.evaluate(() => window.dispatchEvent(new PopStateEvent('popstate')));
-    await page.waitForTimeout(2000);
-    // Should redirect to client dashboard (role guard) or show denied banner
-    const url = page.url();
-    // Guard should prevent staying on admin route
-    expect(url).not.toMatch(/\/admin\/dashboard$/);
+
+    // Guard should redirect client to their own dashboard
+    await expect(page).toHaveURL(/\/client\/dashboard/, { timeout: 5000 });
+
+    // Denied feedback banner should appear with access-restricted message
+    const banner = page.locator('.permission-denied-banner');
+    await expect(banner).toBeVisible({ timeout: 3000 });
+    await expect(banner).toContainText('Access restricted');
   });
 
   test('lawyer cannot access client routes', async ({ page }) => {
@@ -86,9 +89,13 @@ test.describe('Authentication', () => {
 
     await page.evaluate(() => window.history.pushState({}, '', '/client/dashboard'));
     await page.evaluate(() => window.dispatchEvent(new PopStateEvent('popstate')));
-    await page.waitForTimeout(2000);
-    const url = page.url();
-    // Guard should prevent staying on client route
-    expect(url).not.toMatch(/\/client\/dashboard$/);
+
+    // Guard should redirect lawyer to their own dashboard
+    await expect(page).toHaveURL(/\/lawyer\/dashboard/, { timeout: 5000 });
+
+    // Denied feedback banner should appear with access-restricted message
+    const banner = page.locator('.permission-denied-banner');
+    await expect(banner).toBeVisible({ timeout: 3000 });
+    await expect(banner).toContainText('Access restricted');
   });
 });
