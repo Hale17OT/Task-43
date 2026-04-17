@@ -180,11 +180,15 @@ test.describe('API Security & Authorization', () => {
       headers: { Authorization: `Bearer ${clientToken}` },
     })).json();
 
-    // admin reads client1's reviews - should be allowed
+    // admin reads client1's reviews - should be allowed, and the response
+    // must conform to the `{data, total}` list envelope.
     const res = await page.request.get(`/api/reviews?userId=${clientMe.user.id}`, {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    expect(res.ok()).toBe(true);
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(typeof body.total).toBe('number');
   });
 
   test('session revocation: new login invalidates old session', async ({ page }) => {
@@ -199,7 +203,10 @@ test.describe('API Security & Authorization', () => {
     const secondRes = await page.request.post('/api/auth/login', {
       data: { username: 'client2', password: 'SecurePass1!' },
     });
-    expect(secondRes.ok()).toBe(true);
+    expect(secondRes.status()).toBe(200);
+    const secondBody = await secondRes.json();
+    expect(typeof secondBody.token).toBe('string');
+    expect(secondBody.token).not.toBe(firstToken);
 
     // First token should now be invalid (session nonce revoked)
     const meRes = await page.request.get('/api/auth/me', {

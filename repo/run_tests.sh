@@ -4,17 +4,41 @@ set -e
 echo "=== JusticeOps Test Suite ==="
 echo ""
 
-# Detect execution mode: Docker or Local
-# Pass --local to run without Docker, or set USE_LOCAL=1.
-USE_LOCAL="${USE_LOCAL:-0}"
-if [[ "$1" == "--local" ]]; then
-  USE_LOCAL=1
+# -----------------------------------------------------------------------------
+# Execution mode governance.
+#
+# Docker is the ONLY supported mode for governed/audit/CI runs. The local mode
+# exists solely as a developer convenience and is hard-gated behind an opt-in:
+#   - pass `--local` explicitly AND
+#   - set `JUSTICEOPS_ALLOW_LOCAL=1` in the environment
+# Without both, any attempt to use local mode errors out so governed workflows
+# cannot silently skip the real-DB integration gate.
+# -----------------------------------------------------------------------------
+
+REQUESTED_LOCAL=0
+if [[ "$1" == "--local" ]] || [[ "${USE_LOCAL:-0}" == "1" ]]; then
+  REQUESTED_LOCAL=1
+fi
+
+if [[ "$REQUESTED_LOCAL" == "1" && "${JUSTICEOPS_ALLOW_LOCAL:-0}" != "1" ]]; then
+  echo "ERROR: local mode is disabled under the strict Docker-only policy."
+  echo ""
+  echo "Governed test runs MUST execute inside Docker so the real-DB"
+  echo "integration gate (REQUIRE_DB_TESTS=1) is always enforced."
+  echo ""
+  echo "If you are a developer and understand the policy, re-run with:"
+  echo "  JUSTICEOPS_ALLOW_LOCAL=1 ./run_tests.sh --local"
+  echo ""
+  echo "Otherwise run the default Docker-mode suite:"
+  echo "  ./run_tests.sh"
+  exit 2
 fi
 
 FAILED=0
 
-if [[ "$USE_LOCAL" == "1" ]]; then
-  echo "Running in LOCAL mode"
+if [[ "$REQUESTED_LOCAL" == "1" ]]; then
+  echo "Running in LOCAL mode (developer opt-in via JUSTICEOPS_ALLOW_LOCAL=1)"
+  echo "WARNING: local mode is NOT audit-compliant."
   echo ""
 
   echo "[1/4] Backend Unit Tests..."
@@ -22,12 +46,12 @@ if [[ "$USE_LOCAL" == "1" ]]; then
   echo ""
 
   echo "[2/4] Backend Integration Tests..."
+  # Even in local mode, do not let the real-DB gate be silently skipped.
   if [ -z "$DATABASE_URL" ]; then
-    echo "WARNING: DATABASE_URL not set — real-DB tests will be skipped."
-    echo "For release validation, set DATABASE_URL and re-run."
-    (cd backend && npx vitest run src/infrastructure src/api 2>&1) || FAILED=1
+    echo "ERROR: DATABASE_URL is required for integration tests even in local mode."
+    echo "Set DATABASE_URL to a running PostgreSQL 16 instance and retry."
+    FAILED=1
   else
-    echo "DATABASE_URL set — running with REQUIRE_DB_TESTS=1 (mandatory gate)."
     (cd backend && REQUIRE_DB_TESTS=1 npx vitest run src/infrastructure src/api 2>&1) || FAILED=1
   fi
   echo ""
@@ -37,11 +61,10 @@ if [[ "$USE_LOCAL" == "1" ]]; then
   echo ""
 
   echo "[4/4] E2E Tests (Playwright)..."
-  echo "SKIPPED — E2E tests require the full stack running via Docker."
-  echo "Run 'docker compose up --build -d' then 'cd e2e && npx playwright test'."
+  echo "SKIPPED in local mode — E2E requires the Docker stack. Run ./run_tests.sh (Docker mode) for full coverage."
   echo ""
 else
-  echo "Running in DOCKER mode"
+  echo "Running in DOCKER mode (default, audit-compliant)"
   echo ""
 
   echo "[1/4] Backend Unit Tests..."
