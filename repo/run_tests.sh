@@ -67,6 +67,21 @@ else
   echo "Running in DOCKER mode (default, audit-compliant)"
   echo ""
 
+  # Ensure the stack is up. CI harnesses often build then stop containers
+  # before invoking this script, and `docker compose exec` requires a running
+  # target. `up -d` is idempotent: no-op when already healthy.
+  echo "[0/4] Ensuring Docker stack is running..."
+  docker compose up -d db backend frontend 2>&1 || FAILED=1
+  # Wait for the db healthcheck + backend to accept exec.
+  # Backend runs migrations + seeds on boot; give it a bounded window.
+  for i in $(seq 1 40); do
+    if docker compose exec -T backend node -e "process.exit(0)" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  echo ""
+
   echo "[1/4] Backend Unit Tests..."
   docker compose exec -T backend npx vitest run src/domain src/application 2>&1 || FAILED=1
   echo ""
